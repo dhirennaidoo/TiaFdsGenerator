@@ -21,6 +21,14 @@ Openness API\V15.1\Siemens.Engineering.dll
 
 The reference has `Private`/Copy Local set to `false`. The Siemens DLL is proprietary and deliberately ignored by Git; obtain it from the installed TIA Portal V15.1 PublicAPI/Openness installation or place a local development copy at the path above. Do not commit it.
 
+At runtime, the CLI resolves the exact `Siemens.Engineering` version `15.1.0.0` from the 64-bit Siemens Openness registry entries below `HKLM\SOFTWARE\Siemens\Automation\Openness`. The registered assembly path, version, and public key token are validated before the DLL is loaded. This allows the TIA Portal installation directory to differ between the development and execution systems without packaging the proprietary DLL.
+
+To inspect the target machine's Openness registration:
+
+```powershell
+reg query "HKLM\SOFTWARE\Siemens\Automation\Openness" /s /reg:64
+```
+
 ## Build
 
 Open `TiaFdsGenerator.sln` in Visual Studio 2022, select `Debug | x64` or `Release | x64`, and build the solution.

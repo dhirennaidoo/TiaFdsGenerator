@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using TiaFds.Core;
 using TiaFds.Openness;
 
@@ -13,23 +14,29 @@ namespace TiaFds.Cli
                 string input;
                 string retrieveTo;
                 ParseArguments(args, out input, out retrieveTo);
-
-                TiaProjectSummary summary = new TiaProjectReader().Read(input, retrieveTo);
-                Console.WriteLine("Project name: {0}", summary.Name);
-                Console.WriteLine("Project path: {0}", summary.Path);
-                Console.WriteLine("Top-level devices:");
-                foreach (string deviceName in summary.DeviceNames)
-                {
-                    Console.WriteLine("- {0}", deviceName);
-                }
-
-                return 0;
+                SiemensAssemblyResolver.RegisterAndLoad();
+                return Run(input, retrieveTo);
             }
             catch (Exception exception)
             {
                 Console.Error.WriteLine("Error: {0}", exception.Message);
                 return 1;
             }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int Run(string input, string retrieveTo)
+        {
+            TiaProjectSummary summary = new TiaProjectReader().Read(input, retrieveTo);
+            Console.WriteLine("Project name: {0}", summary.Name);
+            Console.WriteLine("Project path: {0}", summary.Path);
+            Console.WriteLine("Top-level devices:");
+            foreach (string deviceName in summary.DeviceNames)
+            {
+                Console.WriteLine("- {0}", deviceName);
+            }
+
+            return 0;
         }
 
         private static void ParseArguments(string[] args, out string input, out string retrieveTo)
