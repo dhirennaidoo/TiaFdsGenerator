@@ -1,6 +1,6 @@
 # TiaFdsGenerator
 
-Milestone 0.2.0 provides an x64 command-line reader for TIA Portal V15.1 Update 4 projects and archives. It opens `.ap15_1` projects, retrieves `.zap15_1` archives, recursively traverses the hardware hierarchy, and discovers PLC software through each device item's `SoftwareContainer`. Program-block enumeration is intentionally outside this milestone.
+Milestone 0.3.0 provides an x64 command-line inventory reader for TIA Portal V15.1 Update 4 projects and archives. It discovers PLC software and inventories program-block metadata, PLC tag tables, and user-defined PLC data types without exposing Siemens objects outside `TiaFds.Openness`. Block source, networks, interfaces, tags, DB members, and UDT members are intentionally not analysed yet.
 
 ## Prerequisites
 
@@ -39,6 +39,12 @@ From a Visual Studio Developer PowerShell prompt:
 msbuild .\TiaFdsGenerator.sln /restore /p:Configuration=Debug /p:Platform=x64
 ```
 
+Run the Siemens-independent tests with:
+
+```powershell
+dotnet test .\tests\TiaFds.Core.Tests\TiaFds.Core.Tests.csproj --configuration Debug -p:Platform=x64
+```
+
 ## Run
 
 Open an existing project:
@@ -65,6 +71,49 @@ Print the complete recursive hardware hierarchy and attached software:
 .\src\TiaFds.Cli\bin\x64\Debug\TiaFds.Cli.exe --input "C:\TIA\Example.ap15_1" --verbose
 ```
 
+Print the selected PLC's detailed metadata inventory:
+
+```powershell
+.\src\TiaFds.Cli\bin\x64\Release\TiaFds.Cli.exe --input "C:\TIA\Example.ap15_1" --plc "BP_PLC" --inventory
+```
+
+Selecting a PLC always prints an inventory summary:
+
+```text
+Selected PLC: BP_PLC
+PLC inventory:
+  Program blocks: 315
+    Organization blocks: 8
+    Function blocks: 62
+    Functions: 41
+    Global data blocks: 150
+    Instance data blocks: 54
+  Tag tables: 12
+  PLC data types: 27
+  Diagnostics: 0
+```
+
+`--inventory` adds aligned metadata tables:
+
+```text
+Program blocks:
+Type                 Number  Language     Consistent Group                                Name
+OrganizationBlock         1  LAD          Yes        Program blocks                       Main
+FunctionBlock            20  SCL          Yes        Program blocks/Drives                Drv
+GlobalDataBlock          50  DB           Yes        Program blocks/Data                  Config
+
+Tag tables:
+  Tags  Group                                Name
+   120  PLC tag tables                       Inputs
+    45  PLC tag tables/Process               ProcessTags
+
+PLC data types:
+Group                                Name
+PLC data types/Control Modules       Drv_Type
+```
+
+`--inventory` requires `--plc`. `--verbose` still controls only hardware hierarchy output. When both flags are supplied, the hardware hierarchy is printed before the PLC inventory.
+
 Expected PLC discovery output resembles:
 
 ```text
@@ -80,10 +129,21 @@ If `--plc` does not match a discovered PLC, the CLI lists the available PLC name
 
 Runtime verification must be performed on the Windows machine that contains the BP project and has TIA Portal V15.1 Update 4 with Openness installed. Copy the built application files to that machine if the repository is built elsewhere, then open PowerShell in the repository or deployment root.
 
-Replace only the project path in this command and run it to verify recursive discovery:
+Replace only the project path in this command and run it to verify recursive discovery and inventory:
 
 ```powershell
-.\src\TiaFds.Cli\bin\x64\Release\TiaFds.Cli.exe --input "C:\Path\To\BP.ap15_1" --verbose
+.\src\TiaFds.Cli\bin\x64\Release\TiaFds.Cli.exe --input "C:\Path\To\BP.ap15_1" --plc "BP_PLC" --inventory --verbose
+```
+
+For a `.zap15_1` archive from Command Prompt, the equivalent command is:
+
+```bat
+TiaFds.Cli.exe ^
+  --input "C:\Projects\BP_Project.zap15_1" ^
+  --retrieve-to "C:\Temp\BP_Project" ^
+  --plc "BP_PLC" ^
+  --inventory ^
+  --verbose
 ```
 
 Confirm that the output contains:
@@ -92,6 +152,7 @@ Confirm that the output contains:
 - `BP_PLC` under `PLCs`;
 - the actual CPU device-item name beneath `BP_PLC`;
 - `Software: BP_PLC [PlcSoftware]` at the correct hierarchy depth; and
+- the PLC inventory summary and detailed program-block, tag-table, and data-type sections;
 - process exit code `0` (`$LASTEXITCODE` in PowerShell).
 
 Then verify case-insensitive PLC selection:
@@ -107,6 +168,6 @@ This command should print `Selected PLC: BP_PLC` and return exit code `0`. Final
 $LASTEXITCODE
 ```
 
-The final command should list every discovered PLC name and report exit code `2`. Runtime verification against a real TIA Portal project remains pending until these commands are run externally.
+The final command should list every discovered PLC name and report exit code `2`. Review any inventory diagnostics, particularly unreadable block metadata or unclassified block types. Runtime verification of milestone 0.3.0 against a real TIA Portal project remains pending until these commands are run externally; Codex did not run against the BP project.
 
 `--retrieve-to` is required for `.zap15_1` input. Run the executable on a machine with the matching TIA Portal V15.1 Update 4 Openness runtime installed. Retrieved projects and generated build output must remain uncommitted.

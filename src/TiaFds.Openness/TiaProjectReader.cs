@@ -13,6 +13,11 @@ namespace TiaFds.Openness
     {
         public TiaProjectSummary Read(string inputPath, string retrieveTo)
         {
+            return Read(inputPath, retrieveTo, null).Summary;
+        }
+
+        public TiaProjectResult Read(string inputPath, string retrieveTo, string plcName)
+        {
             if (string.IsNullOrWhiteSpace(inputPath))
             {
                 throw new ArgumentException("An input path is required.", nameof(inputPath));
@@ -30,7 +35,7 @@ namespace TiaFds.Openness
                 try
                 {
                     project = OpenOrRetrieve(tiaPortal, input, retrieveTo);
-                    return CreateSummary(project);
+                    return CreateResult(project, plcName);
                 }
                 finally
                 {
@@ -68,12 +73,13 @@ namespace TiaFds.Openness
             throw new NotSupportedException("Input must have the .ap15_1 or .zap15_1 extension.");
         }
 
-        private static TiaProjectSummary CreateSummary(Project project)
+        private static TiaProjectResult CreateResult(Project project, string plcName)
         {
             var deviceNames = new List<string>();
             var plcs = new List<PlcInfo>();
             var plcKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var hardwareDevices = new List<HardwareDeviceInfo>();
+            var inventoryContext = new InventoryContext(plcName);
 
             foreach (Device device in project.Devices)
             {
@@ -81,25 +87,28 @@ namespace TiaFds.Openness
                 var items = new List<HardwareItemInfo>();
                 foreach (DeviceItem deviceItem in device.DeviceItems)
                 {
-                    items.Add(CreateHardwareItem(device, deviceItem, plcs, plcKeys));
+                    items.Add(CreateHardwareItem(device, deviceItem, plcs, plcKeys, inventoryContext));
                 }
 
                 hardwareDevices.Add(new HardwareDeviceInfo(device.Name, items));
             }
 
-            return new TiaProjectSummary(
+            var summary = new TiaProjectSummary(
                 project.Name,
                 project.Path.FullName,
                 deviceNames,
                 plcs,
                 hardwareDevices);
+
+            return new TiaProjectResult(summary, inventoryContext.Inventory);
         }
 
         private static HardwareItemInfo CreateHardwareItem(
             Device device,
             DeviceItem deviceItem,
             ICollection<PlcInfo> plcs,
-            ISet<string> plcKeys)
+            ISet<string> plcKeys,
+            InventoryContext inventoryContext)
         {
             HardwareSoftwareInfo softwareInfo = null;
             var serviceProvider = (IEngineeringServiceProvider)deviceItem;
@@ -127,16 +136,43 @@ namespace TiaFds.Openness
                             device.Name,
                             deviceItem.Name));
                     }
+
+                    if (inventoryContext.Inventory == null &&
+                        !string.IsNullOrWhiteSpace(inventoryContext.PlcName) &&
+                        string.Equals(
+                            plcSoftware.Name,
+                            inventoryContext.PlcName,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        inventoryContext.Inventory = new PlcInventoryReader().Read(plcSoftware);
+                    }
                 }
             }
 
             var childItems = new List<HardwareItemInfo>();
             foreach (DeviceItem childItem in deviceItem.DeviceItems)
             {
-                childItems.Add(CreateHardwareItem(device, childItem, plcs, plcKeys));
+                childItems.Add(CreateHardwareItem(
+                    device,
+                    childItem,
+                    plcs,
+                    plcKeys,
+                    inventoryContext));
             }
 
             return new HardwareItemInfo(deviceItem.Name, softwareInfo, childItems);
+        }
+
+        private sealed class InventoryContext
+        {
+            public InventoryContext(string plcName)
+            {
+                PlcName = plcName;
+            }
+
+            public string PlcName { get; }
+
+            public PlcInventory Inventory { get; set; }
         }
     }
 }

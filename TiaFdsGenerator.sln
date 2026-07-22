@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiaFds.Reporting", "src\Tia
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiaFds.Cli", "src\TiaFds.Cli\TiaFds.Cli.csproj", "{C63A93C5-5D47-4F42-B77D-4AED61DC731E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiaFds.Core.Tests", "tests\TiaFds.Core.Tests\TiaFds.Core.Tests.csproj", "{D37C9325-A104-42D5-9BB1-8F5CA3C00213}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -39,6 +41,10 @@ Global
 		{C63A93C5-5D47-4F42-B77D-4AED61DC731E}.Debug|x64.Build.0 = Debug|x64
 		{C63A93C5-5D47-4F42-B77D-4AED61DC731E}.Release|x64.ActiveCfg = Release|x64
 		{C63A93C5-5D47-4F42-B77D-4AED61DC731E}.Release|x64.Build.0 = Release|x64
+		{D37C9325-A104-42D5-9BB1-8F5CA3C00213}.Debug|x64.ActiveCfg = Debug|x64
+		{D37C9325-A104-42D5-9BB1-8F5CA3C00213}.Debug|x64.Build.0 = Debug|x64
+		{D37C9325-A104-42D5-9BB1-8F5CA3C00213}.Release|x64.ActiveCfg = Release|x64
+		{D37C9325-A104-42D5-9BB1-8F5CA3C00213}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

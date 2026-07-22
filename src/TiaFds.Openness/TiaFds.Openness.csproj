@@ -38,6 +38,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="PlcInventoryReader.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TiaOpennessRuntime.cs" />
     <Compile Include="TiaProjectReader.cs" />

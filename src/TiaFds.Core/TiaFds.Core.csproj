@@ -35,8 +35,17 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="HardwareHierarchyInfo.cs" />
+    <Compile Include="InventoryDiagnostic.cs" />
+    <Compile Include="PlcDataTypeInfo.cs" />
     <Compile Include="PlcInfo.cs" />
+    <Compile Include="PlcInventory.cs" />
+    <Compile Include="PlcInventoryBuilder.cs" />
+    <Compile Include="PlcSelection.cs" />
+    <Compile Include="PlcTagTableInfo.cs" />
+    <Compile Include="ProgramBlockCategoryCount.cs" />
+    <Compile Include="ProgramBlockInfo.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="TiaProjectResult.cs" />
     <Compile Include="TiaProjectSummary.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
