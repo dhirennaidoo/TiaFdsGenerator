@@ -39,6 +39,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="TiaOpennessRuntime.cs" />
     <Compile Include="TiaProjectReader.cs" />
   </ItemGroup>
   <ItemGroup>

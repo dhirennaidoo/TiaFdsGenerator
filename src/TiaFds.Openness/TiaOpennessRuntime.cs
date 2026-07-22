@@ -4,29 +4,41 @@ using System.IO;
 using System.Reflection;
 using Microsoft.Win32;
 
-namespace TiaFds.Cli
+namespace TiaFds.Openness
 {
-    internal static class SiemensAssemblyResolver
+    public static class TiaOpennessRuntime
     {
         private const string RequiredAssemblyName = "Siemens.Engineering";
-        private const string AssemblyVersion = "15.1.0.0";
-        private const string PublicKeyToken = "d29ec89bac048f84";
+        private const string RequiredAssemblyVersion = "15.1.0.0";
+        private const string RequiredPublicKeyToken = "d29ec89bac048f84";
         private const string OpennessRegistryPath = @"SOFTWARE\Siemens\Automation\Openness";
 
         private static readonly object SyncRoot = new object();
+        private static bool resolverRegistered;
         private static Assembly loadedAssembly;
 
-        public static void RegisterAndLoad()
+        public static void Initialize()
         {
-            AppDomain.CurrentDomain.AssemblyResolve += ResolveAssembly;
-
             lock (SyncRoot)
             {
+                RegisterResolverOnce();
+
                 if (loadedAssembly == null)
                 {
                     loadedAssembly = LoadRegisteredAssembly();
                 }
             }
+        }
+
+        private static void RegisterResolverOnce()
+        {
+            if (resolverRegistered)
+            {
+                return;
+            }
+
+            AppDomain.CurrentDomain.AssemblyResolve += ResolveAssembly;
+            resolverRegistered = true;
         }
 
         private static Assembly ResolveAssembly(object sender, ResolveEventArgs args)
@@ -69,8 +81,8 @@ namespace TiaFds.Cli
                         "The registered Siemens assembly at '{0}' does not match " +
                         "Siemens.Engineering, Version={1}, PublicKeyToken={2}.",
                         assemblyPath,
-                        AssemblyVersion,
-                        PublicKeyToken),
+                        RequiredAssemblyVersion,
+                        RequiredPublicKeyToken),
                     assemblyPath);
             }
 
@@ -143,7 +155,7 @@ namespace TiaFds.Cli
 
             return string.Equals(
                 registeredVersion.Trim().TrimStart('V', 'v'),
-                AssemblyVersion,
+                RequiredAssemblyVersion,
                 StringComparison.OrdinalIgnoreCase);
         }
 
@@ -151,8 +163,11 @@ namespace TiaFds.Cli
         {
             return string.Equals(assemblyName.Name, RequiredAssemblyName, StringComparison.OrdinalIgnoreCase) &&
                    assemblyName.Version != null &&
-                   string.Equals(assemblyName.Version.ToString(), AssemblyVersion, StringComparison.Ordinal) &&
-                   string.Equals(ToHex(assemblyName.GetPublicKeyToken()), PublicKeyToken, StringComparison.OrdinalIgnoreCase);
+                   string.Equals(assemblyName.Version.ToString(), RequiredAssemblyVersion, StringComparison.Ordinal) &&
+                   string.Equals(
+                       ToHex(assemblyName.GetPublicKeyToken()),
+                       RequiredPublicKeyToken,
+                       StringComparison.OrdinalIgnoreCase);
         }
 
         private static string ToHex(byte[] bytes)
