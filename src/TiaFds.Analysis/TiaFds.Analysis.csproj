@@ -15,7 +15,13 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' "><PlatformTarget>AnyCPU</PlatformTarget><DebugSymbols>true</DebugSymbols><DebugType>full</DebugType><Optimize>false</Optimize><OutputPath>bin\Debug\</OutputPath><DefineConstants>DEBUG;TRACE</DefineConstants><WarningLevel>4</WarningLevel></PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' "><PlatformTarget>AnyCPU</PlatformTarget><DebugType>pdbonly</DebugType><Optimize>true</Optimize><OutputPath>bin\Release\</OutputPath><DefineConstants>TRACE</DefineConstants><WarningLevel>4</WarningLevel></PropertyGroup>
   <ItemGroup><Reference Include="System" /></ItemGroup>
-  <ItemGroup><Compile Include="AnalysisModule.cs" /><Compile Include="Properties\AssemblyInfo.cs" /></ItemGroup>
+  <ItemGroup>
+    <Compile Include="ControlModuleCatalogue.cs" />
+    <Compile Include="ControlModuleConsoleRenderer.cs" />
+    <Compile Include="ControlModuleContainerAnalyzer.cs" />
+    <Compile Include="ControlModuleModels.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
   <ItemGroup><ProjectReference Include="..\TiaFds.Core\TiaFds.Core.csproj"><Project>{ED9EC4D7-BCF7-4FCC-A05F-7638C76556C3}</Project><Name>TiaFds.Core</Name></ProjectReference></ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

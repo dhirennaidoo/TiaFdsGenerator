@@ -1,15 +1,19 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using Siemens.Engineering;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
 using Siemens.Engineering.SW.Tags;
 using Siemens.Engineering.SW.Types;
 using TiaFds.Core;
+using TiaFds.Openness.Xml;
 
 namespace TiaFds.Openness
 {
     internal sealed class PlcInventoryReader
     {
-        public PlcInventory Read(PlcSoftware plcSoftware)
+        public PlcInventory Read(PlcSoftware plcSoftware, bool includeDataBlockStructures)
         {
             if (plcSoftware == null)
             {
@@ -27,8 +31,143 @@ namespace TiaFds.Openness
             ReadProgramBlocks(plcSoftware, builder);
             ReadTagTables(plcSoftware, builder);
             ReadDataTypes(plcSoftware, builder);
+            if (includeDataBlockStructures)
+            {
+                builder.MarkDataBlockStructuresIncluded();
+                ReadDataBlockStructures(plcSoftware, builder);
+            }
 
             return builder.Build();
+        }
+
+        public PlcInventory Read(PlcSoftware plcSoftware)
+        {
+            return Read(plcSoftware, false);
+        }
+
+        private static void ReadDataBlockStructures(PlcSoftware plcSoftware, PlcInventoryBuilder builder)
+        {
+            string temporaryDirectory = Path.Combine(
+                Path.GetTempPath(),
+                "TiaFds",
+                Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(temporaryDirectory);
+                PlcBlockSystemGroup root = plcSoftware.BlockGroup;
+                string rootPath = ReadValue(
+                    () => root.Name,
+                    "Program blocks",
+                    builder,
+                    "Program blocks",
+                    "Name");
+                ReadDataBlockGroup(root, rootPath, temporaryDirectory, builder);
+            }
+            catch (Exception exception)
+            {
+                AddEnumerationDiagnostic(builder, "Program blocks", "global DB structures", exception);
+            }
+            finally
+            {
+                TryDeleteDirectory(temporaryDirectory);
+            }
+        }
+
+        private static void ReadDataBlockGroup(
+            PlcBlockGroup group,
+            string groupPath,
+            string temporaryDirectory,
+            PlcInventoryBuilder builder)
+        {
+            try
+            {
+                foreach (PlcBlock block in group.Blocks)
+                {
+                    var globalDb = block as GlobalDB;
+                    if (globalDb != null)
+                    {
+                        ReadGlobalDataBlock(globalDb, groupPath, temporaryDirectory, builder);
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                AddEnumerationDiagnostic(builder, groupPath, "global data blocks", exception);
+            }
+
+            try
+            {
+                foreach (PlcBlockUserGroup childGroup in group.Groups)
+                {
+                    string groupName = ReadValue(
+                        () => childGroup.Name,
+                        "Unknown group",
+                        builder,
+                        groupPath,
+                        "Name");
+                    ReadDataBlockGroup(
+                        childGroup,
+                        PlcInventoryBuilder.BuildGroupPath(groupPath, groupName),
+                        temporaryDirectory,
+                        builder);
+                }
+            }
+            catch (Exception exception)
+            {
+                AddEnumerationDiagnostic(builder, groupPath, "nested global data-block groups", exception);
+            }
+        }
+
+        private static void ReadGlobalDataBlock(
+            GlobalDB block,
+            string groupPath,
+            string temporaryDirectory,
+            PlcInventoryBuilder builder)
+        {
+            string name = ReadValue(() => block.Name, "Unknown global DB", builder, groupPath, "Name");
+            int? number = ReadNullableInt(() => block.Number, builder, name, "Number");
+            string exportPath = Path.Combine(temporaryDirectory, Guid.NewGuid().ToString("N") + ".xml");
+            try
+            {
+                block.Export(new FileInfo(exportPath), ExportOptions.WithDefaults);
+                DataBlockStructureInfo structure = new DataBlockDeclarationXmlParser().Parse(
+                    exportPath,
+                    name,
+                    number,
+                    groupPath);
+                builder.AddDataBlockStructure(structure);
+            }
+            catch (Exception exception)
+            {
+                builder.AddDataBlockStructure(new DataBlockStructureInfo(
+                    name,
+                    number,
+                    groupPath,
+                    new DataBlockMemberInfo[0],
+                    new[]
+                    {
+                        new InventoryDiagnostic(
+                            "Error",
+                            PlcInventoryBuilder.BuildGroupPath(groupPath, name),
+                            "Global DB declaration extraction failed (" + exception.GetType().Name + ").")
+                    }));
+            }
+            finally
+            {
+                TryDeleteFile(exportPath);
+            }
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            try { if (File.Exists(path)) File.Delete(path); }
+            catch { }
+        }
+
+        private static void TryDeleteDirectory(string path)
+        {
+            try { if (Directory.Exists(path)) Directory.Delete(path, true); }
+            catch { }
         }
 
         private static void ReadProgramBlocks(PlcSoftware plcSoftware, PlcInventoryBuilder builder)

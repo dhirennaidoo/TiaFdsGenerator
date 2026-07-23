@@ -13,5 +13,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\TiaFds.Core\TiaFds.Core.csproj" />
+    <ProjectReference Include="..\..\src\TiaFds.Analysis\TiaFds.Analysis.csproj" />
+    <ProjectReference Include="..\..\src\TiaFds.Openness.Xml\TiaFds.Openness.Xml.csproj" />
   </ItemGroup>
 </Project>

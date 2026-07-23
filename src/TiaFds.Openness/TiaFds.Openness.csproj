@@ -44,6 +44,11 @@
     <Compile Include="TiaProjectReader.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\TiaFds.Openness.Xml\TiaFds.Openness.Xml.csproj">
+      <Project>{B38AE52A-B3D0-4F90-B4F1-280CF37AE5B4}</Project>
+      <Name>TiaFds.Openness.Xml</Name>
+      <SetPlatform>Platform=AnyCPU</SetPlatform>
+    </ProjectReference>
     <ProjectReference Include="..\TiaFds.Core\TiaFds.Core.csproj">
       <Project>{ED9EC4D7-BCF7-4FCC-A05F-7638C76556C3}</Project>
       <Name>TiaFds.Core</Name>

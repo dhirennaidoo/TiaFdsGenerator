@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "1.0",
-  "generatorVersion": "0.4.0",
+  "schemaVersion": "1.1",
+  "generatorVersion": "0.5.1",
   "exportedAtUtc": "2026-07-23T20:00:00Z",
   "project": {
     "name": "Synthetic_Project_项目",
@@ -14,28 +14,78 @@
       "plcName": "Synthetic_PLC",
       "programBlocks": [
         {
-          "name": "Drv_Ä",
-          "blockType": "FunctionBlock",
-          "number": 20,
-          "programmingLanguage": "SCL",
+          "name": "db.cm.Drv",
+          "blockType": "GlobalDataBlock",
+          "number": 50,
+          "programmingLanguage": "DB",
           "groupPath": "Program blocks/Control Modules",
           "isConsistent": true
         }
       ],
-      "tagTables": [
-        {
-          "name": "ProcessTags",
-          "groupPath": "PLC tag tables/Process",
-          "tagCount": 12
-        }
-      ],
+      "tagTables": [],
       "dataTypes": [
         {
-          "name": "Vlv_Type_日本語",
+          "name": "Udt.cm.Drv",
           "groupPath": "PLC data types/Control Modules"
         }
       ],
-      "diagnostics": []
+      "diagnostics": [],
+      "dataBlockStructures": [
+        {
+          "blockName": "db.cm.Drv",
+          "blockNumber": 50,
+          "groupPath": "Program blocks/Control Modules",
+          "members": [
+            {
+              "name": "DriveArray",
+              "memberPath": "db.cm.Drv.DriveArray",
+              "dataTypeName": "Udt.cm.Drv",
+              "nestingLevel": 0,
+              "isArray": true,
+              "arrayBounds": "1..4",
+              "children": []
+            },
+            {
+              "name": "BP_M16006",
+              "memberPath": "db.cm.Drv.BP_M16006",
+              "dataTypeName": "Udt.cm.Drv",
+              "comment": "Bran Storage Silo 1 Activator",
+              "nestingLevel": 0,
+              "isArray": false,
+              "children": [
+                {
+                  "name": "Status",
+                  "memberPath": "db.cm.Drv.BP_M16006.Status",
+                  "dataTypeName": "Struct",
+                  "nestingLevel": 1,
+                  "isArray": false,
+                  "children": [
+                    {
+                      "name": "Running",
+                      "memberPath": "db.cm.Drv.BP_M16006.Status.Running",
+                      "dataTypeName": "Bool",
+                      "nestingLevel": 2,
+                      "isArray": false,
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "M16007",
+              "memberPath": "db.cm.Drv.M16007",
+              "dataTypeName": "Udt.cm.Drv",
+              "comment": "备用驱动",
+              "nestingLevel": 0,
+              "isArray": false,
+              "children": []
+            }
+          ],
+          "diagnostics": []
+        }
+      ],
+      "dataBlockStructuresIncluded": true
     }
   }
 }

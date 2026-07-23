@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <Platforms>AnyCPU</Platforms>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <ProjectGuid>{B38AE52A-B3D0-4F90-B4F1-280CF37AE5B4}</ProjectGuid>
+    <RootNamespace>TiaFds.Openness.Xml</RootNamespace>
+    <AssemblyName>TiaFds.Openness.Xml</AssemblyName>
+    <Deterministic>true</Deterministic>
+    <Version>0.5.1</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TiaFds.Core\TiaFds.Core.csproj" />
+  </ItemGroup>
+</Project>

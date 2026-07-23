@@ -11,9 +11,12 @@ namespace TiaFds.Core
         private readonly List<PlcTagTableInfo> tagTables = new List<PlcTagTableInfo>();
         private readonly List<PlcDataTypeInfo> dataTypes = new List<PlcDataTypeInfo>();
         private readonly List<InventoryDiagnostic> diagnostics = new List<InventoryDiagnostic>();
+        private readonly List<DataBlockStructureInfo> dataBlockStructures = new List<DataBlockStructureInfo>();
         private readonly HashSet<string> blockKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> tagTableKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> dataTypeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> dataBlockStructureKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private bool dataBlockStructuresIncluded;
 
         public PlcInventoryBuilder(string plcName)
         {
@@ -87,14 +90,46 @@ namespace TiaFds.Core
             }
         }
 
+        public void MarkDataBlockStructuresIncluded()
+        {
+            dataBlockStructuresIncluded = true;
+        }
+
+        public bool AddDataBlockStructure(DataBlockStructureInfo structure)
+        {
+            if (structure == null) throw new ArgumentNullException(nameof(structure));
+            string key = JoinKey(
+                structure.GroupPath,
+                structure.BlockNumber.HasValue
+                    ? structure.BlockNumber.Value.ToString(CultureInfo.InvariantCulture)
+                    : string.Empty,
+                structure.BlockName);
+            if (!dataBlockStructureKeys.Add(key))
+            {
+                AddDuplicateDiagnostic("Data-block structure", structure.GroupPath, structure.BlockName);
+                return false;
+            }
+
+            dataBlockStructures.Add(structure);
+            return true;
+        }
+
         public PlcInventory Build()
         {
             blocks.Sort(CompareBlocks);
             tagTables.Sort(CompareTagTables);
             dataTypes.Sort(CompareDataTypes);
             diagnostics.Sort(CompareDiagnostics);
+            dataBlockStructures.Sort(CompareDataBlockStructures);
 
-            return new PlcInventory(plcName, blocks, tagTables, dataTypes, diagnostics);
+            return new PlcInventory(
+                plcName,
+                blocks,
+                tagTables,
+                dataTypes,
+                diagnostics,
+                dataBlockStructures,
+                dataBlockStructuresIncluded);
         }
 
         public static string BuildGroupPath(params string[] parts)
@@ -174,6 +209,14 @@ namespace TiaFds.Core
 
             result = CompareText(left.Source, right.Source);
             return result != 0 ? result : CompareText(left.Message, right.Message);
+        }
+
+        private static int CompareDataBlockStructures(DataBlockStructureInfo left, DataBlockStructureInfo right)
+        {
+            int result = CompareNullableNumber(left.BlockNumber, right.BlockNumber);
+            if (result != 0) return result;
+            result = CompareText(left.GroupPath, right.GroupPath);
+            return result != 0 ? result : CompareText(left.BlockName, right.BlockName);
         }
 
         private static int CompareNullableNumber(int? left, int? right)

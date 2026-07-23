@@ -30,6 +30,11 @@ namespace TiaFds.Core
             writer.WriteLine("  Tag tables: {0}", inventory.TagTables.Count);
             writer.WriteLine("  PLC data types: {0}", inventory.DataTypes.Count);
             writer.WriteLine("  Diagnostics: {0}", inventory.Diagnostics.Count);
+            writer.WriteLine(
+                "  Data-block structures: {0}",
+                inventory.DataBlockStructuresIncluded
+                    ? inventory.DataBlockStructures.Count.ToString()
+                    : "Not included (use --include-db-structures)");
         }
 
         public void PrintDetailedInventory(TextWriter writer, PlcInventory inventory, bool verbose)

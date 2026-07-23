@@ -38,8 +38,8 @@ namespace TiaFds.Core.Tests
                 string path = files.PathOf("snapshot.json");
                 new EngineeringSnapshotJsonWriter().Write(CreateSnapshot("Project", "PLC", false), path, false);
                 string json = File.ReadAllText(path);
-                StringAssert.Contains(json, "\n  \"schemaVersion\": \"1.0\"");
-                StringAssert.Contains(json, "\"generatorVersion\": \"0.4.0\"");
+                StringAssert.Contains(json, "\n  \"schemaVersion\": \"1.1\"");
+                StringAssert.Contains(json, "\"generatorVersion\": \"0.5.1\"");
                 StringAssert.Contains(json, "\"exportedAtUtc\": \"2026-07-23T20:00:00+00:00\"");
                 Assert.IsFalse(json.Contains("SourceFileName"));
             }
@@ -48,7 +48,7 @@ namespace TiaFds.Core.Tests
         [TestMethod]
         public void Reader_RejectsUnsupportedSchema()
         {
-            AssertReadFails(ValidJson().Replace("\"1.0\"", "\"2.0\""), "Unsupported snapshot schema version '2.0'");
+            AssertReadFails(ValidJson().Replace("\"1.1\"", "\"2.0\""), "Unsupported snapshot schema version '2.0'");
         }
 
         [TestMethod]
@@ -69,7 +69,7 @@ namespace TiaFds.Core.Tests
         public void Reader_ToleratesUnknownPropertiesAndNormalizesNullCollections()
         {
             string json = ValidJson()
-                .Replace("\"generatorVersion\": \"0.4.0\",", "\"generatorVersion\": \"0.4.0\", \"futureRoot\": 42,")
+                .Replace("\"generatorVersion\": \"0.5.1\",", "\"generatorVersion\": \"0.5.1\", \"futureRoot\": 42,")
                 .Replace("\"programBlocks\": []", "\"programBlocks\": null")
                 .Replace("\"tagTables\": []", "\"tagTables\": null")
                 .Replace("\"dataTypes\": []", "\"dataTypes\": null")
@@ -174,6 +174,16 @@ namespace TiaFds.Core.Tests
             SnapshotCliOptions valid = SnapshotCliOptions.Parse(new[] { "--import-json", "x.json", "--inventory", "--verbose" });
             Assert.IsTrue(valid.Inventory);
             Assert.IsTrue(valid.Verbose);
+            SnapshotCliOptions discovery = SnapshotCliOptions.Parse(new[]
+            {
+                "--import-json", "x.json", "--discover-modules", "--module-family", "Drive"
+            });
+            Assert.IsTrue(discovery.DiscoverModules);
+            Assert.AreEqual("Drive", discovery.ModuleFamily);
+            Assert.ThrowsException<ArgumentException>(() => SnapshotCliOptions.Parse(new[]
+            {
+                "--import-json", "x.json", "--module-family", "Drive"
+            }));
         }
 
         private static EngineeringSnapshot CreateSnapshot(string projectName, string plcName, bool includePath)
@@ -218,7 +228,7 @@ namespace TiaFds.Core.Tests
 
         private static string ValidJson()
         {
-            return "{\"schemaVersion\":\"1.0\",\"generatorVersion\":\"0.4.0\",\"exportedAtUtc\":\"2026-07-23T20:00:00Z\",\"project\":{\"name\":\"P\",\"sourceFileName\":\"P.ap15_1\",\"selectedPlc\":{\"name\":\"PLC\",\"deviceName\":\"D\",\"deviceItemName\":\"CPU\"},\"inventory\":{\"plcName\":\"PLC\",\"programBlocks\":[],\"tagTables\":[],\"dataTypes\":[],\"diagnostics\":[]}}}";
+            return "{\"schemaVersion\":\"1.1\",\"generatorVersion\":\"0.5.1\",\"exportedAtUtc\":\"2026-07-23T20:00:00Z\",\"project\":{\"name\":\"P\",\"sourceFileName\":\"P.ap15_1\",\"selectedPlc\":{\"name\":\"PLC\",\"deviceName\":\"D\",\"deviceItemName\":\"CPU\"},\"inventory\":{\"plcName\":\"PLC\",\"programBlocks\":[],\"tagTables\":[],\"dataTypes\":[],\"diagnostics\":[],\"dataBlockStructures\":[],\"dataBlockStructuresIncluded\":false}}}";
         }
 
         private sealed class TestDirectory : IDisposable

@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiaFds.Core", "src\TiaFds.C
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiaFds.Openness", "src\TiaFds.Openness\TiaFds.Openness.csproj", "{246E16EA-B61A-4D76-9EB9-49AA326E4E15}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiaFds.Openness.Xml", "src\TiaFds.Openness.Xml\TiaFds.Openness.Xml.csproj", "{B38AE52A-B3D0-4F90-B4F1-280CF37AE5B4}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiaFds.Analysis", "src\TiaFds.Analysis\TiaFds.Analysis.csproj", "{A6202A93-F421-462B-91A6-08695B5957A0}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiaFds.Reporting", "src\TiaFds.Reporting\TiaFds.Reporting.csproj", "{010C44A7-101B-4558-A2AA-D8E2289FA87B}"
@@ -31,6 +33,10 @@ Global
 		{246E16EA-B61A-4D76-9EB9-49AA326E4E15}.Debug|x64.Build.0 = Debug|x64
 		{246E16EA-B61A-4D76-9EB9-49AA326E4E15}.Release|x64.ActiveCfg = Release|x64
 		{246E16EA-B61A-4D76-9EB9-49AA326E4E15}.Release|x64.Build.0 = Release|x64
+		{B38AE52A-B3D0-4F90-B4F1-280CF37AE5B4}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B38AE52A-B3D0-4F90-B4F1-280CF37AE5B4}.Debug|x64.Build.0 = Debug|Any CPU
+		{B38AE52A-B3D0-4F90-B4F1-280CF37AE5B4}.Release|x64.ActiveCfg = Release|Any CPU
+		{B38AE52A-B3D0-4F90-B4F1-280CF37AE5B4}.Release|x64.Build.0 = Release|Any CPU
 		{A6202A93-F421-462B-91A6-08695B5957A0}.Debug|x64.ActiveCfg = Debug|Any CPU
 		{A6202A93-F421-462B-91A6-08695B5957A0}.Debug|x64.Build.0 = Debug|Any CPU
 		{A6202A93-F421-462B-91A6-08695B5957A0}.Release|x64.ActiveCfg = Release|Any CPU

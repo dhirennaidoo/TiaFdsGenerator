@@ -11,14 +11,12 @@ namespace TiaFds.Core
                 throw new SnapshotValidationException("Snapshot JSON does not contain a root object.");
             }
 
-            if (!string.Equals(
-                    snapshot.SchemaVersion,
-                    SnapshotSchema.CurrentVersion,
-                    StringComparison.Ordinal))
+            if (!SnapshotSchema.IsSupported(snapshot.SchemaVersion))
             {
                 throw new SnapshotValidationException(string.Format(
-                    "Unsupported snapshot schema version '{0}'. Supported version: {1}.",
+                    "Unsupported snapshot schema version '{0}'. Supported versions: {1}, {2}.",
                     snapshot.SchemaVersion ?? string.Empty,
+                    SnapshotSchema.LegacyVersion,
                     SnapshotSchema.CurrentVersion));
             }
 

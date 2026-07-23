@@ -43,7 +43,11 @@ namespace TiaFds.Extract.Cli
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static int Run(ExtractOptions options)
         {
-            TiaProjectResult result = new TiaProjectReader().Read(options.Input, options.RetrieveTo, options.PlcName);
+            TiaProjectResult result = new TiaProjectReader().Read(
+                options.Input,
+                options.RetrieveTo,
+                options.PlcName,
+                options.IncludeDataBlockStructures);
             TiaProjectSummary summary = result.Summary;
             Console.WriteLine("Project name: {0}", summary.Name);
             Console.WriteLine("Project path: {0}", summary.Path);
@@ -124,7 +128,7 @@ namespace TiaFds.Extract.Cli
         private sealed class ExtractOptions
         {
             public string Input, RetrieveTo, PlcName, ExportJson;
-            public bool Verbose, Inventory, Overwrite, IncludeSourcePath;
+            public bool Verbose, Inventory, Overwrite, IncludeSourcePath, IncludeDataBlockStructures;
 
             public static ExtractOptions Parse(string[] args)
             {
@@ -138,6 +142,7 @@ namespace TiaFds.Extract.Cli
                     if (option == "--inventory") { result.Inventory = true; continue; }
                     if (option == "--overwrite") { result.Overwrite = true; continue; }
                     if (option == "--include-source-path") { result.IncludeSourcePath = true; continue; }
+                    if (option == "--include-db-structures") { result.IncludeDataBlockStructures = true; continue; }
                     if (option != "--input" && option != "--retrieve-to" && option != "--plc" && option != "--export-json")
                         throw Invalid("Unknown argument: " + option);
                     if (++i >= args.Length || string.IsNullOrWhiteSpace(args[i])) throw Invalid("Missing value for " + option + ".");
@@ -147,13 +152,14 @@ namespace TiaFds.Extract.Cli
                     else result.ExportJson = args[i];
                 }
                 if (string.IsNullOrWhiteSpace(result.Input)) throw Invalid("--input is required.");
-                if ((result.Inventory || result.ExportJson != null) && string.IsNullOrWhiteSpace(result.PlcName)) throw Invalid("--inventory and --export-json require --plc <name>.");
+                if ((result.Inventory || result.ExportJson != null || result.IncludeDataBlockStructures) && string.IsNullOrWhiteSpace(result.PlcName))
+                    throw Invalid("--inventory, --include-db-structures, and --export-json require --plc <name>.");
                 if ((result.Overwrite || result.IncludeSourcePath) && result.ExportJson == null) throw Invalid("--overwrite and --include-source-path require --export-json <path>.");
                 return result;
             }
 
             private static ArgumentException Invalid(string text) { return new ArgumentException(text + Environment.NewLine + Usage()); }
-            private static string Usage() { return "Usage: TiaFds.Extract.Cli.exe --input <path> [--retrieve-to <folder>] [--plc <name>] [--inventory] [--verbose] [--export-json <path>] [--overwrite] [--include-source-path]"; }
+            private static string Usage() { return "Usage: TiaFds.Extract.Cli.exe --input <path> [--retrieve-to <folder>] [--plc <name>] [--inventory] [--verbose] [--include-db-structures] [--export-json <path>] [--overwrite] [--include-source-path]"; }
         }
     }
 }
