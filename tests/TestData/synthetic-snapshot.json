@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0",
+  "generatorVersion": "0.4.0",
+  "exportedAtUtc": "2026-07-23T20:00:00Z",
+  "project": {
+    "name": "Synthetic_Project_项目",
+    "sourceFileName": "Synthetic_Project.zap15_1",
+    "selectedPlc": {
+      "name": "Synthetic_PLC",
+      "deviceName": "Synthetic station",
+      "deviceItemName": "CPU_1"
+    },
+    "inventory": {
+      "plcName": "Synthetic_PLC",
+      "programBlocks": [
+        {
+          "name": "Drv_Ä",
+          "blockType": "FunctionBlock",
+          "number": 20,
+          "programmingLanguage": "SCL",
+          "groupPath": "Program blocks/Control Modules",
+          "isConsistent": true
+        }
+      ],
+      "tagTables": [
+        {
+          "name": "ProcessTags",
+          "groupPath": "PLC tag tables/Process",
+          "tagCount": 12
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "Vlv_Type_日本語",
+          "groupPath": "PLC data types/Control Modules"
+        }
+      ],
+      "diagnostics": []
+    }
+  }
+}

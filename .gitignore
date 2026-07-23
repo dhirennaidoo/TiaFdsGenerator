@@ -368,3 +368,6 @@ FodyWeavers.xsd
 # TIA Portal projects and archives (including retrieved projects)
 *.ap15_1
 *.zap15_1
+
+# Generated inventory snapshots may contain customer engineering data
+*.inventory.json

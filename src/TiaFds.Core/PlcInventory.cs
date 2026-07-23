@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
 namespace TiaFds.Core
 {
+    [JsonObject(MemberSerialization.OptIn)]
     public sealed class PlcInventory
     {
+        [JsonConstructor]
         public PlcInventory(
             string plcName,
             IReadOnlyList<ProgramBlockInfo> programBlocks,
@@ -20,14 +23,19 @@ namespace TiaFds.Core
             ProgramBlockCategories = CountBlockCategories(ProgramBlocks);
         }
 
+        [JsonProperty("plcName")]
         public string PlcName { get; }
 
+        [JsonProperty("programBlocks")]
         public IReadOnlyList<ProgramBlockInfo> ProgramBlocks { get; }
 
+        [JsonProperty("tagTables")]
         public IReadOnlyList<PlcTagTableInfo> TagTables { get; }
 
+        [JsonProperty("dataTypes")]
         public IReadOnlyList<PlcDataTypeInfo> DataTypes { get; }
 
+        [JsonProperty("diagnostics")]
         public IReadOnlyList<InventoryDiagnostic> Diagnostics { get; }
 
         public IReadOnlyList<ProgramBlockCategoryCount> ProgramBlockCategories { get; }

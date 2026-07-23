@@ -47,6 +47,7 @@
     <ProjectReference Include="..\TiaFds.Core\TiaFds.Core.csproj">
       <Project>{ED9EC4D7-BCF7-4FCC-A05F-7638C76556C3}</Project>
       <Name>TiaFds.Core</Name>
+      <SetPlatform>Platform=AnyCPU</SetPlatform>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

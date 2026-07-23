@@ -92,6 +92,7 @@ namespace TiaFds.Core
             blocks.Sort(CompareBlocks);
             tagTables.Sort(CompareTagTables);
             dataTypes.Sort(CompareDataTypes);
+            diagnostics.Sort(CompareDiagnostics);
 
             return new PlcInventory(plcName, blocks, tagTables, dataTypes, diagnostics);
         }
@@ -161,6 +162,18 @@ namespace TiaFds.Core
         {
             int result = CompareText(left.GroupPath, right.GroupPath);
             return result != 0 ? result : CompareText(left.Name, right.Name);
+        }
+
+        private static int CompareDiagnostics(InventoryDiagnostic left, InventoryDiagnostic right)
+        {
+            int result = CompareText(left.Severity, right.Severity);
+            if (result != 0)
+            {
+                return result;
+            }
+
+            result = CompareText(left.Source, right.Source);
+            return result != 0 ? result : CompareText(left.Message, right.Message);
         }
 
         private static int CompareNullableNumber(int? left, int? right)
