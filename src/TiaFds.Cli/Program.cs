@@ -1,6 +1,7 @@
 using System;
 using TiaFds.Core;
 using TiaFds.Analysis;
+using TiaFds.Reporting;
 
 namespace TiaFds.Cli
 {
@@ -12,6 +13,7 @@ namespace TiaFds.Cli
             {
                 SnapshotCliOptions options = SnapshotCliOptions.Parse(args);
                 EngineeringSnapshot snapshot = new EngineeringSnapshotJsonReader().Read(options.ImportJson);
+                ControlModuleDiscoveryResult sharedDiscovery = null;
                 var renderer = new PlcInventoryConsoleRenderer();
                 renderer.PrintSummary(Console.Out, snapshot);
                 if (options.Inventory)
@@ -31,7 +33,8 @@ namespace TiaFds.Cli
                         return 4;
                     }
 
-                    ControlModuleDiscoveryResult result = new ControlModuleContainerAnalyzer().Analyze(snapshot);
+                    ControlModuleDiscoveryResult result =
+                        sharedDiscovery ?? (sharedDiscovery = new ControlModuleContainerAnalyzer().Analyze(snapshot));
                     if (!result.DataBlockStructuresAvailable)
                     {
                         Console.Error.WriteLine();
@@ -49,7 +52,7 @@ namespace TiaFds.Cli
 
                 if (options.AnalyzeModuleCalls)
                 {
-                    ControlModuleImplementationStatus? status = ParseStatus(options.ImplementationStatus);
+                    AnalysisImplementationStatus? status = ParseStatus(options.ImplementationStatus);
                     if (options.ModuleFamily != null &&
                         ControlModuleCatalogue.FindByFamily(options.ModuleFamily) == null)
                     {
@@ -58,7 +61,8 @@ namespace TiaFds.Cli
                         return 4;
                     }
 
-                    ControlModuleDiscoveryResult discovery = new ControlModuleContainerAnalyzer().Analyze(snapshot);
+                    ControlModuleDiscoveryResult discovery =
+                        sharedDiscovery ?? (sharedDiscovery = new ControlModuleContainerAnalyzer().Analyze(snapshot));
                     ControlModuleImplementationResult implementation =
                         new ControlModuleCallAnalyzer().Analyze(snapshot, discovery);
                     if (!implementation.DataBlockStructuresAvailable || !implementation.BlockCallsAvailable)
@@ -74,15 +78,17 @@ namespace TiaFds.Cli
                         return 6;
                     }
 
-                    var implementationRenderer = new ControlModuleImplementationConsoleRenderer();
+                    AnalysisReport report = new AnalysisReportBuilder().Build(
+                        snapshot, discovery, implementation);
+                    var implementationRenderer = new AnalysisReportConsoleRenderer();
                     Console.WriteLine();
-                    implementationRenderer.PrintSummary(Console.Out, implementation);
-                    implementationRenderer.PrintDetails(Console.Out, implementation,
-                        new ControlModuleImplementationFilter
+                    implementationRenderer.PrintSummary(Console.Out, report);
+                    implementationRenderer.PrintDetails(Console.Out, report,
+                        new AnalysisReportFilter
                         {
                             ModuleFamily = options.ModuleFamily,
                             ModuleName = options.ModuleName,
-                            Status = status
+                            ImplementationStatus = status
                         });
                 }
                 return 0;
@@ -107,13 +113,13 @@ namespace TiaFds.Cli
             return string.Join(", ", names);
         }
 
-        private static ControlModuleImplementationStatus? ParseStatus(string value)
+        private static AnalysisImplementationStatus? ParseStatus(string value)
         {
             if (string.IsNullOrWhiteSpace(value)) return null;
-            ControlModuleImplementationStatus status;
+            AnalysisImplementationStatus status;
             if (!Enum.TryParse(value, true, out status))
                 throw new ArgumentException("Unknown implementation status '" + value +
-                    "'. Valid values: " + string.Join(", ", Enum.GetNames(typeof(ControlModuleImplementationStatus))));
+                    "'. Valid values: " + string.Join(", ", Enum.GetNames(typeof(AnalysisImplementationStatus))));
             return status;
         }
     }

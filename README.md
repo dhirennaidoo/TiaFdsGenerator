@@ -43,9 +43,17 @@ EngineeringSnapshot JSON
     -> TiaFds.Cli (Any CPU, .NET Framework 4.8)
     -> TiaFds.Analysis
     -> control-module declaration and call correlation
+    -> TiaFds.Reporting
+    -> immutable AnalysisReport
 ```
 
-Only `TiaFds.Openness` references `Siemens.Engineering`. `TiaFds.Openness.Xml` securely parses exported XML without Siemens dependencies. `TiaFds.Cli` references Core and Analysis and runs without TIA Portal, Siemens registry entries, `Siemens.Engineering`, or `TiaFds.Openness`.
+Only `TiaFds.Openness` references `Siemens.Engineering`. `TiaFds.Openness.Xml` securely parses exported XML without Siemens dependencies. `TiaFds.Cli` references Core, Analysis, and Reporting and runs without TIA Portal, Siemens registry entries, `Siemens.Engineering`, or `TiaFds.Openness`.
+
+## Reporting model
+
+`TiaFds.Reporting` converts the completed discovery and implementation results into an immutable, deterministic `AnalysisReport`. The report owns copies of module declarations, implementation statuses, call sites, family and processing-variant summaries, individual and grouped diagnostics, and manual-review items. It does not perform extraction or correlation.
+
+The module-call CLI path builds this report and uses `AnalysisReportConsoleRenderer` for summary and detail output. This stable reporting boundary is intended for later JSON, Excel, FDS, and project-comparison consumers; those exporters are not implemented yet.
 
 ## Prerequisites and Siemens reference
 
