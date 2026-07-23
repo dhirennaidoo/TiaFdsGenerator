@@ -1,33 +1,30 @@
 # TiaFdsGenerator
 
-Application version 0.5.1 is a corrective update to milestone 0.5.0. It discovers Advansys control-module declarations from global PLC data blocks and includes declaration comments as module descriptions in detailed CLI output, while preserving the Siemens-independent snapshot boundary introduced in 0.4.0.
-
-At this plant, a module family is stored in one global DB and each declared DB member represents a plant module:
+Application version 0.6.1 corrects milestone 0.6.0 block-call graph reconstruction and correlates Advansys control-module declarations with the processing-function calls that receive those declarations through an `InOut` parameter.
 
 ```text
-db.cm.Drv
-    M16006 : Udt.cm.Drv
-    M16007 : Udt.cm.Drv
-    M16008 : Udt.cm.Drv
-        |
-        v
-TiaFds.Analysis
-        |
-        v
-DriveModule collection
+db.cm.Drv.BP_M16006 : Udt.cm.Drv
+              |
+              | InOut
+              v
+FC52 cm.DrvType2
+              |
+              v
+ControlModuleImplementation
 ```
 
-The declared datatype is the primary classification evidence. Member names and DB numbers are not used to infer module types.
-
 ```text
-Milestone 0.5.0:
+Milestone 0.5.x:
     What modules exist?
 
 Milestone 0.6.0:
-    Which processing FC variant is connected to each module through InOut?
+    Which processing FC variant is connected to each module?
+
+Future milestone:
+    What commands, feedbacks, alarms, interlocks and I/O are connected?
 ```
 
-No FC call, InOut connection, network, subtype, alarm, interlock, or other UDT semantic analysis is performed in 0.5.0.
+The DB declaration remains the source of truth for a module's name, datatype, family, path, and description. A structurally observed block call supplies separate implementation evidence: processing FC, variant, caller, network, and actual `InOut` expression. Version 0.6.0 does not interpret the semantic meaning of any other call parameter.
 
 ## Architecture
 
@@ -45,36 +42,22 @@ Development/reporting machine
 EngineeringSnapshot JSON
     -> TiaFds.Cli (Any CPU, .NET Framework 4.8)
     -> TiaFds.Analysis
-    -> Advansys control-module discovery
-    -> TiaFds.Reporting
+    -> control-module declaration and call correlation
 ```
 
-`TiaFds.Openness.Xml` is an Any CPU parser library with no Siemens assembly reference. It isolates secure parsing of exported declaration XML so the parser can be tested without TIA Portal. Only `TiaFds.Openness` references `Siemens.Engineering`.
-
-`TiaFds.Cli` references Core, Analysis, and Reporting only. It does not initialize Openness, inspect Siemens registry entries, or load `Siemens.Engineering`.
+Only `TiaFds.Openness` references `Siemens.Engineering`. `TiaFds.Openness.Xml` securely parses exported XML without Siemens dependencies. `TiaFds.Cli` references Core and Analysis and runs without TIA Portal, Siemens registry entries, `Siemens.Engineering`, or `TiaFds.Openness`.
 
 ## Prerequisites and Siemens reference
 
-Building the complete solution requires:
-
-- Visual Studio 2022 with the .NET desktop development workload
+- Visual Studio 2022 with .NET desktop development
 - .NET Framework 4.8 Developer Pack
-- TIA Portal V15.1 Update 4 with Openness installed
-- A 64-bit Windows environment for extraction
+- TIA Portal V15.1 Update 4 with Openness
+- x64 Windows for extraction
+- extraction user in the **Siemens TIA Openness** local user group
 
-The extraction account must belong to the **Siemens TIA Openness** local user group. Sign out and back in after adding the account.
-
-Only `TiaFds.Openness` references:
-
-```text
-Openness API\V15.1\Siemens.Engineering.dll
-```
-
-Copy Local/`Private` is `false`. The proprietary DLL must not be committed or redistributed. At runtime, `TiaFds.Openness` resolves and validates `Siemens.Engineering` version `15.1.0.0` from the 64-bit registration beneath `HKLM\SOFTWARE\Siemens\Automation\Openness`.
+`TiaFds.Openness` references `Openness API\V15.1\Siemens.Engineering.dll` with Copy Local/`Private` set to false. Do not redistribute or commit this DLL. Runtime discovery validates version `15.1.0.0` through the 64-bit registration under `HKLM\SOFTWARE\Siemens\Automation\Openness`.
 
 ## Build and test
-
-The solution `x64` configuration maps Siemens-facing projects to x64 and Siemens-independent projects to Any CPU.
 
 ```powershell
 msbuild .\TiaFdsGenerator.sln /restore /p:Configuration=Debug /p:Platform=x64
@@ -82,156 +65,185 @@ msbuild .\TiaFdsGenerator.sln /t:Build /p:Configuration=Release /p:Platform=x64
 dotnet test .\tests\TiaFds.Core.Tests\TiaFds.Core.Tests.csproj --configuration Debug -p:Platform=AnyCPU
 ```
 
-All automated tests use synthetic XML and snapshots. They require no TIA Portal installation, Siemens DLL, registry entry, or real project.
+All automated tests use synthetic snapshots and XML. They require no TIA installation or customer project.
 
-## Extraction
+## Snapshot schema 1.2
 
-`TiaFds.Extract.Cli` supports:
+Application version and schema version are independent: application 0.6.1 writes schema `1.2`.
 
-- `--input <path>`
-- `--retrieve-to <folder>`
-- `--plc <name>`
-- `--inventory`
-- `--verbose`
-- `--include-db-structures`
-- `--export-json <path>`
-- `--overwrite`
-- `--include-source-path`
+Schema 1.2 retains the 1.1 DB-declaration contract and adds:
 
-DB declaration extraction is deliberately opt-in because exporting every global DB can be expensive:
+- `inventory.blockCallsIncluded`
+- `inventory.blockCalls`
+- caller and called-block identities
+- caller group path, network number/title, and call ordinal
+- generic formal parameter name, direction, datatype, actual expression, and resolved member path
+- per-call extraction/parsing diagnostics
+
+Readers remain compatible with schema 1.1 and normalize missing calls to an empty, not-included collection. Schema 1.0 also remains readable. Unsupported schema versions are rejected clearly. Raw XML, temporary paths, Siemens objects, handles, and runtime references are never serialized.
+
+## TIA extraction
+
+DB structure and block-call extraction are separate opt-in operations:
 
 ```bat
 TiaFds.Extract.Cli.exe ^
   --input "C:\Projects\BP_V15.1.ap15_1" ^
   --plc "BP_PLC" ^
   --include-db-structures ^
-  --export-json "C:\Exports\BP_PLC.0.5.0.json" ^
+  --include-block-calls ^
+  --export-json "C:\Exports\BP_PLC.0.6.0.json" ^
   --overwrite
 ```
 
-When `--include-db-structures` is absent, normal 0.4.0 inventory extraction continues and the snapshot records that DB structures were not included. Module discovery then returns exit code `6` with instructions to re-export.
+`--include-block-calls` does not imply `--include-db-structures`. When absent, block calls remain empty and normal extraction continues. Offline correlation requires both flags and reports `CM100_BLOCK_CALLS_NOT_EXTRACTED` or `CM101_DB_STRUCTURES_NOT_EXTRACTED` when either dataset is absent.
 
-The Openness layer enumerates all eligible global DBs; it does not hard-code DB50, DB60, DB80, DB90, or DB95. Each `GlobalDB` is exported through the documented V15.1 `PlcBlock.Export(..., ExportOptions.WithDefaults)` API. The temporary XML is parsed with DTD processing disabled and no external entity resolver, converted to generic Core models, and deleted where practical.
+Executable OBs, FCs, and FBs are exported generically through the V15.1 `PlcBlock.Export(..., ExportOptions.WithDefaults)` API. Each export is parsed and deleted where practical. A failure on one block produces `CM111_BLOCK_CALL_EXTRACTION_FAILED`; extraction continues for other blocks.
 
-If one DB cannot be exported or parsed, its basic program-block inventory remains, a per-DB extraction diagnostic is recorded, and other DBs continue.
+Version 0.6.1 reconstructs each LAD/FBD network as a UID-based connectivity graph. A call formal may be connected using its own parameter UID or the enclosing call-part UID plus port name. The parser follows matching wire endpoints to `Access` or constant nodes without depending on XML element order. Input, Output, and InOut directions use the same graph evidence; multiple connected operands are diagnosed and never selected arbitrarily.
 
-Extractor exit codes:
+The verified V15.1 FC501 export uses a dedicated `Call` element rather than a `Part` element. Its first `cm.DrvType1` call is connected as follows:
 
-- `0`: success
-- `1`: general or Openness failure
-- `2`: PLC not found
-- `3`: snapshot destination already exists
-- `4`: invalid arguments
-- `5`: snapshot serialization/write failure
+```text
+Call UId=29
+  CallInfo cm.DrvType1
+    Parameter Name=Drv Section=InOut
 
-## Offline module discovery
+Wire UId=36
+  NameCon UId=29 Name=Drv
+  IdentCon UId=26
 
-`TiaFds.Cli` supports:
+Access UId=26
+  Component db.cm.Drv
+  Component BP_M16001
+```
 
-- `--import-json <path>`
-- `--inventory`
-- `--verbose`
-- `--discover-modules`
-- `--module-family <name>`
+The resulting expression is `"db.cm.Drv".BP_M16001`, normalized and DB-structure-validated as `db.cm.Drv.BP_M16001`.
 
-Run all-family discovery:
+Access rendering preserves quoted symbolic components, nested members, array indexes, block-interface/local variables, simple literals, and supported absolute DB addresses. When DB structures were extracted, a normalized symbolic path is written to `resolvedMemberPath` only if that exact member exists in the snapshot. `actualExpression` is retained even when validation or normalization fails.
+
+### Supported languages and limitations
+
+The current parser supports the namespace-qualified FlgNet call representation exported for:
+
+- LAD
+- FBD
+
+It reads all `CallInfo` instructions, multiple calls per network, formal metadata, wired symbolic accesses, caller identity, and network metadata. SCL and STL textual network formats are not parsed in 0.6.0 and produce `CM110_UNSUPPORTED_BLOCK_LANGUAGE`. Unsupported instructions, protected/inconsistent blocks, missing parameter assignments, and V15.1 export variations are diagnosed rather than guessed.
+
+Corrective graph diagnostics include:
+
+- `CM117_PARAMETER_CONNECTION_AMBIGUOUS`
+- `CM118_CONNECTED_OPERAND_NOT_SUPPORTED`
+- `CM119_ACCESS_EXPRESSION_RENDER_FAILED`
+- `CM120_CONNECTION_REFERENCE_NOT_FOUND`
+- `CM121_RESOLVED_PATH_NOT_IN_DB_STRUCTURES`
+- `CM122_INOUT_CONNECTION_INCOMPLETE`
+
+Optional unconnected outputs do not generate warnings merely for being unconnected.
+
+## Symbol normalization
+
+Both the original actual expression and its normalized path are retained:
+
+```text
+Actual:   "db.cm.Drv".BP_M16006
+Resolved: db.cm.Drv.BP_M16006
+```
+
+Normalization handles quoted/unquoted symbolic DB names, whitespace, nested members, escaped quotes, and array indexes without changing case. Ordinal comparisons are used. Local (`#Local`), pointer (`P##Drive`), and absolute (`DB50.DBX0.0`) expressions are not claimed as resolved because the snapshot does not currently contain enough address metadata for an unambiguous symbolic mapping.
+
+## Processing-function catalogue
+
+Function name is the primary identity. Expected FC numbers validate known drive definitions but never classify a function by number alone:
+
+| Family | Function | Expected number | Variant | Module datatype |
+|---|---|---:|---|---|
+| Drive | `cm.DrvType0` | FC50 | DrvType0 | `Udt.cm.Drv` |
+| Drive | `cm.DrvType1` | FC51 | DrvType1 | `Udt.cm.Drv` |
+| Drive | `cm.DrvType2` | FC52 | DrvType2 | `Udt.cm.Drv` |
+| Drive | `cm.DrvType3` | FC53 | DrvType3 | `Udt.cm.Drv` |
+| Valve | `cm.VlvType0` | — | VlvType0 | `Udt.cm.Vlv` |
+| Valve | `cm.VlvType1` | — | VlvType1 | `Udt.cm.Vlv` |
+| DigitalInput | `cm.LimType0..2` | — | LimType0..2 | `Udt.cm.DI` |
+
+A changed drive FC number produces `CM113_FUNCTION_NUMBER_MISMATCH` but the name-matched call evidence is retained.
+
+## InOut selection and correlation
+
+The analyser prefers evidence in this order:
+
+1. `InOut` direction
+2. formal datatype matching the catalogue's module UDT
+3. catalogue parameter-name hint
+4. actual path matching a discovered module
+
+Multiple equally strong candidates produce `CM103_AMBIGUOUS_INOUT_PARAMETER`; no arbitrary choice is made. The normalized actual path must exactly match a top-level module declaration path. Nested UDT fields are not modules. Names, descriptions, DB offsets, nearby calls, and FC numbers alone never create a correlation.
+
+Statuses are:
+
+- `Correlated`: exactly one recognized call resolves to the module
+- `Unreferenced`: no recognized call resolves to the module
+- `MultipleCalls`: more than one distinct call resolves to it; all sites are retained
+- `UnresolvedParameter`: reserved for unresolved per-module evidence
+- `UnsupportedCall`: reserved for unsupported parsed call forms
+- `FamilyMismatch`: processing-function family differs from declaration datatype family
+
+Exact duplicate parser records for one call site are deduplicated and diagnosed. No call is selected as primary when multiple calls remain.
+
+## Offline commands
+
+Declaration discovery remains available:
 
 ```bat
 TiaFds.Cli.exe ^
-  --import-json "C:\Exports\BP_PLC.0.5.0.json" ^
+  --import-json "C:\Exports\BP_PLC.0.6.0.json" ^
   --discover-modules
 ```
 
-Filter detailed rows to one known family:
+Run implementation correlation:
 
 ```bat
 TiaFds.Cli.exe ^
-  --import-json "C:\Exports\BP_PLC.0.5.0.json" ^
-  --discover-modules ^
-  --module-family Drive
+  --import-json "C:\Exports\BP_PLC.0.6.0.json" ^
+  --analyze-module-calls
 ```
 
-Recognised exact datatype mappings are:
+Optional filters:
 
-| Declared datatype | Family | Expected container |
-|---|---|---|
-| `Udt.cm.Drv` | Drive | `db.cm.Drv` |
-| `Udt.cm.Vlv` | Valve | `db.cm.Vlv` |
-| `Udt.cm.Spd` | Speed | `db.cm.Spd` |
-| `Udt.cm.DI` | DigitalInput | `db.cm.DI` |
-| `Udt.cm.AI` | AnalogueInput | `db.cm.AI` |
-| `Udt.cm.AO` | AnalogueOutput | `db.cm.AO` |
-| `Udt.cm.DO` | DigitalOutput | `db.cm.DO` |
-
-Comparison is case-insensitive to match the existing TIA symbol-selection workflow; original spelling is retained in output. A matching datatype in another DB is still a module, but produces `CM004_MODULE_IN_UNEXPECTED_CONTAINER`. A familiar member name without a recognised datatype is not classified.
-
-Import CLI exit code `6` means the snapshot did not include DB structures. Existing general and invalid-argument exit codes remain `1` and `4`.
-
-## Snapshot schema 1.1
-
-Application version 0.5.1 writes the unchanged snapshot schema `1.1`. Schema and application versions remain independent.
-
-Schema 1.1 adds:
-
-- `inventory.dataBlockStructuresIncluded`
-- `inventory.dataBlockStructures`
-- DB name, number, and group path
-- hierarchical members with full member paths
-- declared element datatypes
-- optional comments
-- nesting levels
-- array declarations and bounds
-- per-DB extraction diagnostics
-
-The reader also accepts schema 1.0 and normalizes missing DB structures to an empty, not-included collection. Unknown schema versions are rejected.
-
-Absolute source paths remain omitted unless `--include-source-path` is supplied. Raw Siemens XML, temporary paths, and Siemens runtime objects are never serialized.
-
-## Arrays and hierarchy
-
-An array such as:
-
-```text
-Drives : Array[1..20] of Udt.cm.Drv
+```bat
+--module-family Drive
+--implementation-status Correlated
+--implementation-status Unreferenced
+--module BP_M16006
 ```
 
-is represented as one module-collection candidate with `isArray`, bounds, path, and element datatype. Milestone 0.5.0 does not invent symbolic modules for individual indexes and emits `CM006_ARRAY_NOT_EXPANDED`.
-
-The hierarchy and nesting level distinguish a module declaration from its nested fields. Once a member directly matches a recognised module datatype, its children are preserved in the snapshot but are not independently classified as modules.
-
-TIA V15.1 global-DB exports preserve declaration nodes emitted for the DB. Inline nested structures can therefore be retained. Referenced UDT definitions may not be expanded inside the DB export; 0.5.0 does not separately export and merge UDT internals.
-
-Know-how-protected, inconsistent, or otherwise non-exportable blocks may be rejected by the V15.1 Openness runtime. These cases are retained as per-DB extraction diagnostics rather than terminating the complete snapshot. Comment availability and language depend on what V15.1 includes in the exported XML.
+Filter values are case-insensitive. Invalid family or status values are rejected. Output preserves descriptions, all multiple-call sites, processing FC and variant, caller, network, original `InOut` expression, and canonical member path.
 
 ## Manual BP verification
 
-Codex does not have the BP project and must not open it. On the TIA V15.1 machine run:
+Codex must not open the BP project. On the TIA V15.1 machine run:
 
 ```bat
 TiaFds.Extract.Cli.exe ^
   --input "C:\Projects\BP_V15.1.ap15_1" ^
   --plc "BP_PLC" ^
   --include-db-structures ^
-  --export-json "C:\Exports\BP_PLC.0.5.0.json" ^
+  --include-block-calls ^
+  --export-json "C:\Exports\BP_PLC.0.6.0.json" ^
   --overwrite
 ```
 
-Verify that:
+Verify `blockCalls` contains `cm.DrvType0` through `cm.DrvType3`, caller/network facts, parameters, original actual expressions, and resolved paths where possible. Confirm no raw XML or temporary path appears and per-block failures are diagnostics.
 
-1. `db.cm.Drv` and its top-level members are present.
-2. Drive declarations retain `Udt.cm.Drv`.
-3. Full paths, emitted nested declarations, comments, arrays, and bounds are preserved.
-4. No Siemens object, raw Siemens XML, or temporary export path appears.
-5. A single failed DB creates diagnostics without preventing other DBs from exporting.
-
-Transfer the JSON to a machine without TIA Portal and run:
+Transfer the JSON to the development machine:
 
 ```bat
 TiaFds.Cli.exe ^
-  --import-json "C:\Exports\BP_PLC.0.5.0.json" ^
-  --discover-modules
+  --import-json "C:\Exports\BP_PLC.0.6.0.json" ^
+  --analyze-module-calls
 ```
 
-Verify module totals against declarations visible in TIA, ensure nested primitive fields are absent from module rows, and confirm DB numbers are displayed but not used as identifiers. No module should have an FC variant assigned. FC/InOut correlation begins in milestone 0.6.0.
+Verify `BP_M16006` against the FC/caller/network visible in TIA, descriptions remain visible, spare declarations are unreferenced, multiple calls retain every site, unresolved parameters are not correlated, and the CLI runs without Siemens software.
 
-Generated binaries, `bin`/`obj`, retrieved TIA projects, customer snapshots, temporary exports, and Siemens DLLs must remain uncommitted.
+Generated binaries, `bin`/`obj`, retrieved projects, customer snapshots, temporary XML, and Siemens DLLs must remain uncommitted.

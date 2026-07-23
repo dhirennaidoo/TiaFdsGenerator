@@ -7,7 +7,7 @@
     <RootNamespace>TiaFds.Openness.Xml</RootNamespace>
     <AssemblyName>TiaFds.Openness.Xml</AssemblyName>
     <Deterministic>true</Deterministic>
-    <Version>0.5.1</Version>
+    <Version>0.6.1</Version>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TiaFds.Core\TiaFds.Core.csproj" />

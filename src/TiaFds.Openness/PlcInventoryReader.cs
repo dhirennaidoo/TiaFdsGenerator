@@ -13,7 +13,10 @@ namespace TiaFds.Openness
 {
     internal sealed class PlcInventoryReader
     {
-        public PlcInventory Read(PlcSoftware plcSoftware, bool includeDataBlockStructures)
+        public PlcInventory Read(
+            PlcSoftware plcSoftware,
+            bool includeDataBlockStructures,
+            bool includeBlockCalls)
         {
             if (plcSoftware == null)
             {
@@ -36,13 +39,110 @@ namespace TiaFds.Openness
                 builder.MarkDataBlockStructuresIncluded();
                 ReadDataBlockStructures(plcSoftware, builder);
             }
+            if (includeBlockCalls)
+            {
+                builder.MarkBlockCallsIncluded();
+                ReadBlockCalls(plcSoftware, builder);
+            }
 
             return builder.Build();
         }
 
         public PlcInventory Read(PlcSoftware plcSoftware)
         {
-            return Read(plcSoftware, false);
+            return Read(plcSoftware, false, false);
+        }
+
+        private static void ReadBlockCalls(PlcSoftware plcSoftware, PlcInventoryBuilder builder)
+        {
+            string temporaryDirectory = Path.Combine(Path.GetTempPath(), "TiaFds", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(temporaryDirectory);
+                PlcBlockSystemGroup root = plcSoftware.BlockGroup;
+                string rootPath = ReadValue(() => root.Name, "Program blocks", builder, "Program blocks", "Name");
+                ISet<string> knownMemberPaths = builder.DataBlockStructuresIncluded
+                    ? builder.GetDataBlockMemberPaths()
+                    : null;
+                ReadExecutableBlockGroup(root, rootPath, temporaryDirectory, builder, knownMemberPaths);
+            }
+            catch (Exception exception)
+            {
+                builder.AddDiagnostic(new InventoryDiagnostic(
+                    "Error", "CM111_BLOCK_CALL_EXTRACTION_FAILED", "Program blocks",
+                    "Block-call extraction failed (" + exception.GetType().Name + ")."));
+            }
+            finally { TryDeleteDirectory(temporaryDirectory); }
+        }
+
+        private static void ReadExecutableBlockGroup(
+            PlcBlockGroup group,
+            string groupPath,
+            string temporaryDirectory,
+            PlcInventoryBuilder builder,
+            ISet<string> knownMemberPaths)
+        {
+            try
+            {
+                foreach (PlcBlock block in group.Blocks)
+                {
+                    if (block is OB || block is FC || block is FB)
+                        ReadExecutableBlock(block, groupPath, temporaryDirectory, builder, knownMemberPaths);
+                }
+            }
+            catch (Exception exception)
+            {
+                builder.AddDiagnostic(new InventoryDiagnostic(
+                    "Error", "CM111_BLOCK_CALL_EXTRACTION_FAILED", groupPath,
+                    "Executable blocks could not be enumerated (" + exception.GetType().Name + ")."));
+            }
+
+            try
+            {
+                foreach (PlcBlockUserGroup child in group.Groups)
+                {
+                    string name = ReadValue(() => child.Name, "Unknown group", builder, groupPath, "Name");
+                    ReadExecutableBlockGroup(child,
+                        PlcInventoryBuilder.BuildGroupPath(groupPath, name),
+                        temporaryDirectory, builder, knownMemberPaths);
+                }
+            }
+            catch (Exception exception)
+            {
+                builder.AddDiagnostic(new InventoryDiagnostic(
+                    "Error", "CM111_BLOCK_CALL_EXTRACTION_FAILED", groupPath,
+                    "Nested executable block groups could not be enumerated (" + exception.GetType().Name + ")."));
+            }
+        }
+
+        private static void ReadExecutableBlock(
+            PlcBlock block,
+            string groupPath,
+            string temporaryDirectory,
+            PlcInventoryBuilder builder,
+            ISet<string> knownMemberPaths)
+        {
+            string name = ReadValue(() => block.Name, "Unknown executable block", builder, groupPath, "Name");
+            int? number = ReadNullableInt(() => block.Number, builder, name, "Number");
+            string language = ReadValue(() => block.ProgrammingLanguage.ToString(), "Unknown", builder, name, "ProgrammingLanguage");
+            string blockType = ClassifyBlock(block, builder, name);
+            string path = PlcInventoryBuilder.BuildGroupPath(groupPath, name);
+            string exportPath = Path.Combine(temporaryDirectory, Guid.NewGuid().ToString("N") + ".xml");
+            try
+            {
+                block.Export(new FileInfo(exportPath), ExportOptions.WithDefaults);
+                BlockCallParseResult parsed = new BlockCallXmlParser().Parse(
+                    exportPath, name, number, blockType, path, language, knownMemberPaths);
+                foreach (BlockCallInfo call in parsed.Calls) builder.AddBlockCall(call);
+                foreach (InventoryDiagnostic diagnostic in parsed.Diagnostics) builder.AddDiagnostic(diagnostic);
+            }
+            catch (Exception exception)
+            {
+                builder.AddDiagnostic(new InventoryDiagnostic(
+                    "Error", "CM111_BLOCK_CALL_EXTRACTION_FAILED", path,
+                    "Executable-block call extraction failed (" + exception.GetType().Name + ")."));
+            }
+            finally { TryDeleteFile(exportPath); }
         }
 
         private static void ReadDataBlockStructures(PlcSoftware plcSoftware, PlcInventoryBuilder builder)

@@ -2,6 +2,6 @@ namespace TiaFds.Core
 {
     public static class ProductVersion
     {
-        public const string Current = "0.5.1";
+        public const string Current = "0.6.1";
     }
 }

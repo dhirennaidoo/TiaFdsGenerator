@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Document>
+  <SW.Blocks.FC>
+    <AttributeList>
+      <Name>cm.Drv.System</Name>
+      <Number>501</Number>
+      <ProgrammingLanguage>LAD</ProgrammingLanguage>
+    </AttributeList>
+    <ObjectList>
+      <SW.Blocks.CompileUnit ID="8" CompositionName="CompileUnits">
+        <AttributeList>
+          <NetworkSource>
+            <FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v3">
+              <Parts>
+                <Access Scope="GlobalVariable" UId="26">
+                  <Symbol>
+                    <Component Name="db.cm.Drv" />
+                    <Component Name="BP_M16001" />
+                    <Address Area="DB" Type="Udt.cm.Drv" BlockNumber="50" BitOffset="0" Informative="true" />
+                  </Symbol>
+                </Access>
+                <Call UId="29">
+                  <CallInfo Name="cm.DrvType1" BlockType="FC">
+                    <IntegerAttribute Name="BlockNumber" Informative="true">51</IntegerAttribute>
+                    <Parameter Name="Drv" Section="InOut" Type="Udt.cm.Drv">
+                      <StringAttribute Name="InterfaceFlags" Informative="true">S7_Visible</StringAttribute>
+                    </Parameter>
+                  </CallInfo>
+                </Call>
+              </Parts>
+              <Wires>
+                <Wire UId="36">
+                  <IdentCon UId="26" />
+                  <NameCon UId="29" Name="Drv" />
+                </Wire>
+              </Wires>
+            </FlgNet>
+          </NetworkSource>
+          <ProgrammingLanguage>LAD</ProgrammingLanguage>
+        </AttributeList>
+        <ObjectList>
+          <MultilingualText CompositionName="Title">
+            <ObjectList>
+              <MultilingualTextItem CompositionName="Items">
+                <AttributeList>
+                  <Culture>en-US</Culture>
+                  <Text>BP_M16001 SANITIZED FUNCTION BLOCK</Text>
+                </AttributeList>
+              </MultilingualTextItem>
+            </ObjectList>
+          </MultilingualText>
+        </ObjectList>
+      </SW.Blocks.CompileUnit>
+    </ObjectList>
+  </SW.Blocks.FC>
+</Document>

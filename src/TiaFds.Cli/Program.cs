@@ -46,6 +46,45 @@ namespace TiaFds.Cli
                     moduleRenderer.PrintSummary(Console.Out, result);
                     moduleRenderer.PrintDetails(Console.Out, result, options.ModuleFamily);
                 }
+
+                if (options.AnalyzeModuleCalls)
+                {
+                    ControlModuleImplementationStatus? status = ParseStatus(options.ImplementationStatus);
+                    if (options.ModuleFamily != null &&
+                        ControlModuleCatalogue.FindByFamily(options.ModuleFamily) == null)
+                    {
+                        Console.Error.WriteLine("Error: Unknown module family '{0}'. Known families: {1}",
+                            options.ModuleFamily, KnownFamilies());
+                        return 4;
+                    }
+
+                    ControlModuleDiscoveryResult discovery = new ControlModuleContainerAnalyzer().Analyze(snapshot);
+                    ControlModuleImplementationResult implementation =
+                        new ControlModuleCallAnalyzer().Analyze(snapshot, discovery);
+                    if (!implementation.DataBlockStructuresAvailable || !implementation.BlockCallsAvailable)
+                    {
+                        Console.Error.WriteLine();
+                        Console.Error.WriteLine("Control-module call analysis requires both data-block structures and block calls.");
+                        Console.Error.WriteLine("Re-export the snapshot with:");
+                        Console.Error.WriteLine("--include-db-structures --include-block-calls");
+                        foreach (ControlModuleImplementationDiagnostic diagnostic in implementation.Diagnostics)
+                            if (diagnostic.Code == "CM100_BLOCK_CALLS_NOT_EXTRACTED" ||
+                                diagnostic.Code == "CM101_DB_STRUCTURES_NOT_EXTRACTED")
+                                Console.Error.WriteLine("{0}: {1}", diagnostic.Code, diagnostic.Message);
+                        return 6;
+                    }
+
+                    var implementationRenderer = new ControlModuleImplementationConsoleRenderer();
+                    Console.WriteLine();
+                    implementationRenderer.PrintSummary(Console.Out, implementation);
+                    implementationRenderer.PrintDetails(Console.Out, implementation,
+                        new ControlModuleImplementationFilter
+                        {
+                            ModuleFamily = options.ModuleFamily,
+                            ModuleName = options.ModuleName,
+                            Status = status
+                        });
+                }
                 return 0;
             }
             catch (ArgumentException exception)
@@ -66,6 +105,16 @@ namespace TiaFds.Cli
             foreach (ControlModuleTypeDefinition definition in ControlModuleCatalogue.Definitions)
                 names.Add(definition.ModuleFamily);
             return string.Join(", ", names);
+        }
+
+        private static ControlModuleImplementationStatus? ParseStatus(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            ControlModuleImplementationStatus status;
+            if (!Enum.TryParse(value, true, out status))
+                throw new ArgumentException("Unknown implementation status '" + value +
+                    "'. Valid values: " + string.Join(", ", Enum.GetNames(typeof(ControlModuleImplementationStatus))));
+            return status;
         }
     }
 }

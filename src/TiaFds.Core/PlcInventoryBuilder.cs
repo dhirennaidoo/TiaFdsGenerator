@@ -12,11 +12,13 @@ namespace TiaFds.Core
         private readonly List<PlcDataTypeInfo> dataTypes = new List<PlcDataTypeInfo>();
         private readonly List<InventoryDiagnostic> diagnostics = new List<InventoryDiagnostic>();
         private readonly List<DataBlockStructureInfo> dataBlockStructures = new List<DataBlockStructureInfo>();
+        private readonly List<BlockCallInfo> blockCalls = new List<BlockCallInfo>();
         private readonly HashSet<string> blockKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> tagTableKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> dataTypeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> dataBlockStructureKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private bool dataBlockStructuresIncluded;
+        private bool blockCallsIncluded;
 
         public PlcInventoryBuilder(string plcName)
         {
@@ -95,6 +97,17 @@ namespace TiaFds.Core
             dataBlockStructuresIncluded = true;
         }
 
+        public bool DataBlockStructuresIncluded => dataBlockStructuresIncluded;
+
+        public ISet<string> GetDataBlockMemberPaths()
+        {
+            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (DataBlockStructureInfo structure in dataBlockStructures)
+                foreach (DataBlockMemberInfo member in structure.Members)
+                    AddMemberPaths(member, paths);
+            return paths;
+        }
+
         public bool AddDataBlockStructure(DataBlockStructureInfo structure)
         {
             if (structure == null) throw new ArgumentNullException(nameof(structure));
@@ -114,6 +127,17 @@ namespace TiaFds.Core
             return true;
         }
 
+        public void MarkBlockCallsIncluded()
+        {
+            blockCallsIncluded = true;
+        }
+
+        public void AddBlockCall(BlockCallInfo call)
+        {
+            if (call == null) throw new ArgumentNullException(nameof(call));
+            blockCalls.Add(call);
+        }
+
         public PlcInventory Build()
         {
             blocks.Sort(CompareBlocks);
@@ -129,7 +153,16 @@ namespace TiaFds.Core
                 dataTypes,
                 diagnostics,
                 dataBlockStructures,
-                dataBlockStructuresIncluded);
+                dataBlockStructuresIncluded,
+                blockCalls,
+                blockCallsIncluded);
+        }
+
+        private static void AddMemberPaths(DataBlockMemberInfo member, ISet<string> paths)
+        {
+            if (member == null) return;
+            if (!string.IsNullOrWhiteSpace(member.MemberPath)) paths.Add(member.MemberPath);
+            foreach (DataBlockMemberInfo child in member.Children) AddMemberPaths(child, paths);
         }
 
         public static string BuildGroupPath(params string[] parts)

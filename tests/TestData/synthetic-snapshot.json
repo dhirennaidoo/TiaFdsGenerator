@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "1.1",
-  "generatorVersion": "0.5.1",
+  "schemaVersion": "1.2",
+  "generatorVersion": "0.6.1",
   "exportedAtUtc": "2026-07-23T20:00:00Z",
   "project": {
     "name": "Synthetic_Project_项目",
@@ -85,7 +85,76 @@
           "diagnostics": []
         }
       ],
-      "dataBlockStructuresIncluded": true
+      "dataBlockStructuresIncluded": true,
+      "blockCalls": [
+        {
+          "callingBlockName": "ProcessDrives",
+          "callingBlockNumber": 100,
+          "callingBlockType": "Function",
+          "callingBlockPath": "Program blocks/ProcessDrives",
+          "calledBlockName": "cm.DrvType2",
+          "calledBlockNumber": 52,
+          "calledBlockType": "Function",
+          "networkNumber": 147,
+          "networkTitle": "Bran Storage Silo",
+          "callOrdinal": 1,
+          "parameters": [
+            {
+              "formalName": "Module",
+              "direction": "InOut",
+              "formalDataType": "Udt.cm.Drv",
+              "actualExpression": "\"db.cm.Drv\".BP_M16006",
+              "resolvedMemberPath": "db.cm.Drv.BP_M16006"
+            }
+          ],
+          "diagnostics": []
+        },
+        {
+          "callingBlockName": "ProcessDrives",
+          "callingBlockNumber": 100,
+          "callingBlockType": "Function",
+          "callingBlockPath": "Program blocks/ProcessDrives",
+          "calledBlockName": "cm.DrvType0",
+          "calledBlockNumber": 50,
+          "calledBlockType": "Function",
+          "networkNumber": 148,
+          "networkTitle": "Drive array primary call",
+          "callOrdinal": 2,
+          "parameters": [
+            {
+              "formalName": "Module",
+              "direction": "InOut",
+              "formalDataType": "Udt.cm.Drv",
+              "actualExpression": "db.cm.Drv.DriveArray",
+              "resolvedMemberPath": "db.cm.Drv.DriveArray"
+            }
+          ],
+          "diagnostics": []
+        },
+        {
+          "callingBlockName": "BackupDrives",
+          "callingBlockNumber": 101,
+          "callingBlockType": "Function",
+          "callingBlockPath": "Program blocks/BackupDrives",
+          "calledBlockName": "cm.DrvType1",
+          "calledBlockNumber": 51,
+          "calledBlockType": "Function",
+          "networkNumber": 3,
+          "networkTitle": "Drive array secondary call",
+          "callOrdinal": 1,
+          "parameters": [
+            {
+              "formalName": "Module",
+              "direction": "InOut",
+              "formalDataType": "Udt.cm.Drv",
+              "actualExpression": "db.cm.Drv.DriveArray",
+              "resolvedMemberPath": "db.cm.Drv.DriveArray"
+            }
+          ],
+          "diagnostics": []
+        }
+      ],
+      "blockCallsIncluded": true
     }
   }
 }

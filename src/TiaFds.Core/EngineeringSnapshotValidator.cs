@@ -14,9 +14,10 @@ namespace TiaFds.Core
             if (!SnapshotSchema.IsSupported(snapshot.SchemaVersion))
             {
                 throw new SnapshotValidationException(string.Format(
-                    "Unsupported snapshot schema version '{0}'. Supported versions: {1}, {2}.",
+                    "Unsupported snapshot schema version '{0}'. Supported versions: {1}, {2}, {3}.",
                     snapshot.SchemaVersion ?? string.Empty,
                     SnapshotSchema.LegacyVersion,
+                    SnapshotSchema.PreviousVersion,
                     SnapshotSchema.CurrentVersion));
             }
 

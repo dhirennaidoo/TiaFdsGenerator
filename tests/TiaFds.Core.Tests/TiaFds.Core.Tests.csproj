@@ -16,4 +16,10 @@
     <ProjectReference Include="..\..\src\TiaFds.Analysis\TiaFds.Analysis.csproj" />
     <ProjectReference Include="..\..\src\TiaFds.Openness.Xml\TiaFds.Openness.Xml.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\TestData\sanitized-fc501-first-call.xml">
+      <Link>TestData\sanitized-fc501-first-call.xml</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

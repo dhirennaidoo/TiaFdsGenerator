@@ -27,6 +27,16 @@ namespace TiaFds.Openness
             string plcName,
             bool includeDataBlockStructures)
         {
+            return Read(inputPath, retrieveTo, plcName, includeDataBlockStructures, false);
+        }
+
+        public TiaProjectResult Read(
+            string inputPath,
+            string retrieveTo,
+            string plcName,
+            bool includeDataBlockStructures,
+            bool includeBlockCalls)
+        {
             if (string.IsNullOrWhiteSpace(inputPath))
             {
                 throw new ArgumentException("An input path is required.", nameof(inputPath));
@@ -44,7 +54,7 @@ namespace TiaFds.Openness
                 try
                 {
                     project = OpenOrRetrieve(tiaPortal, input, retrieveTo);
-                    return CreateResult(project, plcName, includeDataBlockStructures);
+                    return CreateResult(project, plcName, includeDataBlockStructures, includeBlockCalls);
                 }
                 finally
                 {
@@ -85,13 +95,14 @@ namespace TiaFds.Openness
         private static TiaProjectResult CreateResult(
             Project project,
             string plcName,
-            bool includeDataBlockStructures)
+            bool includeDataBlockStructures,
+            bool includeBlockCalls)
         {
             var deviceNames = new List<string>();
             var plcs = new List<PlcInfo>();
             var plcKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var hardwareDevices = new List<HardwareDeviceInfo>();
-            var inventoryContext = new InventoryContext(plcName, includeDataBlockStructures);
+            var inventoryContext = new InventoryContext(plcName, includeDataBlockStructures, includeBlockCalls);
 
             foreach (Device device in project.Devices)
             {
@@ -158,7 +169,8 @@ namespace TiaFds.Openness
                     {
                         inventoryContext.Inventory = new PlcInventoryReader().Read(
                             plcSoftware,
-                            inventoryContext.IncludeDataBlockStructures);
+                            inventoryContext.IncludeDataBlockStructures,
+                            inventoryContext.IncludeBlockCalls);
                     }
                 }
             }
@@ -179,15 +191,17 @@ namespace TiaFds.Openness
 
         private sealed class InventoryContext
         {
-            public InventoryContext(string plcName, bool includeDataBlockStructures)
+            public InventoryContext(string plcName, bool includeDataBlockStructures, bool includeBlockCalls)
             {
                 PlcName = plcName;
                 IncludeDataBlockStructures = includeDataBlockStructures;
+                IncludeBlockCalls = includeBlockCalls;
             }
 
             public string PlcName { get; }
 
             public bool IncludeDataBlockStructures { get; }
+            public bool IncludeBlockCalls { get; }
 
             public PlcInventory Inventory { get; set; }
         }

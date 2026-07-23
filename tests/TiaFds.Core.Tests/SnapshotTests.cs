@@ -38,8 +38,8 @@ namespace TiaFds.Core.Tests
                 string path = files.PathOf("snapshot.json");
                 new EngineeringSnapshotJsonWriter().Write(CreateSnapshot("Project", "PLC", false), path, false);
                 string json = File.ReadAllText(path);
-                StringAssert.Contains(json, "\n  \"schemaVersion\": \"1.1\"");
-                StringAssert.Contains(json, "\"generatorVersion\": \"0.5.1\"");
+                StringAssert.Contains(json, "\n  \"schemaVersion\": \"1.2\"");
+                StringAssert.Contains(json, "\"generatorVersion\": \"0.6.1\"");
                 StringAssert.Contains(json, "\"exportedAtUtc\": \"2026-07-23T20:00:00+00:00\"");
                 Assert.IsFalse(json.Contains("SourceFileName"));
             }
@@ -48,7 +48,7 @@ namespace TiaFds.Core.Tests
         [TestMethod]
         public void Reader_RejectsUnsupportedSchema()
         {
-            AssertReadFails(ValidJson().Replace("\"1.1\"", "\"2.0\""), "Unsupported snapshot schema version '2.0'");
+            AssertReadFails(ValidJson().Replace("\"1.2\"", "\"2.0\""), "Unsupported snapshot schema version '2.0'");
         }
 
         [TestMethod]
@@ -69,7 +69,7 @@ namespace TiaFds.Core.Tests
         public void Reader_ToleratesUnknownPropertiesAndNormalizesNullCollections()
         {
             string json = ValidJson()
-                .Replace("\"generatorVersion\": \"0.5.1\",", "\"generatorVersion\": \"0.5.1\", \"futureRoot\": 42,")
+                .Replace("\"generatorVersion\": \"0.6.1\",", "\"generatorVersion\": \"0.6.1\", \"futureRoot\": 42,")
                 .Replace("\"programBlocks\": []", "\"programBlocks\": null")
                 .Replace("\"tagTables\": []", "\"tagTables\": null")
                 .Replace("\"dataTypes\": []", "\"dataTypes\": null")
@@ -186,6 +186,78 @@ namespace TiaFds.Core.Tests
             }));
         }
 
+        [TestMethod]
+        public void BlockCalls_RoundTripUnicodeNullsEmptyParametersAndDeterministicOrder()
+        {
+            var builder = new PlcInventoryBuilder("PLC");
+            builder.MarkDataBlockStructuresIncluded();
+            builder.MarkBlockCallsIncluded();
+            builder.AddBlockCall(new BlockCallInfo("Later", 20, "Function", "Blocks/Later",
+                "cm.DrvType1", 51, "Function", null, "ç½‘ç»œ æ—¥æœ¬èªž", 2,
+                new CallParameterInfo[0], null));
+            builder.AddBlockCall(new BlockCallInfo("Earlier", 10, "Function", "Blocks/Earlier",
+                "cm.DrvType0", 50, "Function", 1, "First", 1,
+                new[]
+                {
+                    new CallParameterInfo("Module", "InOut", "Udt.cm.Drv",
+                        "\"db.cm.Drv\".A[2]", "db.cm.Drv.A[2]"),
+                    new CallParameterInfo("Unicode", "Input", "String", "\"æ•°æ®\".æˆå‘˜", "æ•°æ®.æˆå‘˜"),
+                    new CallParameterInfo("Local", "Input", "Int", "#LocalDrive", null),
+                    new CallParameterInfo("Absolute", "Input", "Bool", "DB50.DBX0.0", null),
+                    new CallParameterInfo("Constant", "Input", "Bool", "TRUE", null),
+                    new CallParameterInfo("Unconnected", "Output", "Bool", null, null)
+                }, null));
+            var snapshot = new EngineeringSnapshot("1.2", "0.6.1", FixedTime,
+                new ProjectSnapshot("P", "P.ap15_1", null,
+                    new PlcInfo("PLC", "D", "CPU"), builder.Build()));
+
+            EngineeringSnapshot actual = ReadText(WriteText(snapshot));
+            Assert.AreEqual(2, actual.Project.Inventory.BlockCalls.Count);
+            Assert.AreEqual("Earlier", actual.Project.Inventory.BlockCalls[0].CallingBlockName);
+            BlockCallInfo first = actual.Project.Inventory.BlockCalls[0];
+            Assert.AreEqual("db.cm.Drv.A[2]",
+                System.Linq.Enumerable.Single(first.Parameters, item => item.FormalName == "Module").ResolvedMemberPath);
+            Assert.AreEqual("#LocalDrive",
+                System.Linq.Enumerable.Single(first.Parameters, item => item.FormalName == "Local").ActualExpression);
+            Assert.AreEqual("DB50.DBX0.0",
+                System.Linq.Enumerable.Single(first.Parameters, item => item.FormalName == "Absolute").ActualExpression);
+            Assert.AreEqual("TRUE",
+                System.Linq.Enumerable.Single(first.Parameters, item => item.FormalName == "Constant").ActualExpression);
+            Assert.IsNull(System.Linq.Enumerable.Single(
+                first.Parameters, item => item.FormalName == "Unconnected").ActualExpression);
+            Assert.IsNull(actual.Project.Inventory.BlockCalls[1].NetworkNumber);
+            Assert.AreEqual(0, actual.Project.Inventory.BlockCalls[1].Parameters.Count);
+        }
+
+        [TestMethod]
+        public void Reader_AcceptsSchema11MissingCallsAndRejectsMalformedCallCollection()
+        {
+            EngineeringSnapshot previous = ReadText(ValidJson()
+                .Replace("\"schemaVersion\":\"1.2\"", "\"schemaVersion\":\"1.1\"")
+                .Replace(",\"blockCalls\":[],\"blockCallsIncluded\":false", string.Empty));
+            Assert.AreEqual(0, previous.Project.Inventory.BlockCalls.Count);
+            Assert.IsFalse(previous.Project.Inventory.BlockCallsIncluded);
+            AssertReadFails(ValidJson().Replace("\"blockCalls\":[]", "\"blockCalls\":{}"), "malformed");
+        }
+
+        [TestMethod]
+        public void SnapshotCliOptions_ParsesModuleCallFiltersAndRejectsInvalidPlacement()
+        {
+            SnapshotCliOptions options = SnapshotCliOptions.Parse(new[]
+            {
+                "--import-json", "x.json", "--analyze-module-calls",
+                "--module-family", "Drive", "--implementation-status", "Correlated",
+                "--module", "BP_M16006"
+            });
+            Assert.IsTrue(options.AnalyzeModuleCalls);
+            Assert.AreEqual("Correlated", options.ImplementationStatus);
+            Assert.AreEqual("BP_M16006", options.ModuleName);
+            Assert.ThrowsException<ArgumentException>(() => SnapshotCliOptions.Parse(new[]
+            {
+                "--import-json", "x.json", "--implementation-status", "Correlated"
+            }));
+        }
+
         private static EngineeringSnapshot CreateSnapshot(string projectName, string plcName, bool includePath)
         {
             var builder = new PlcInventoryBuilder(plcName);
@@ -228,7 +300,7 @@ namespace TiaFds.Core.Tests
 
         private static string ValidJson()
         {
-            return "{\"schemaVersion\":\"1.1\",\"generatorVersion\":\"0.5.1\",\"exportedAtUtc\":\"2026-07-23T20:00:00Z\",\"project\":{\"name\":\"P\",\"sourceFileName\":\"P.ap15_1\",\"selectedPlc\":{\"name\":\"PLC\",\"deviceName\":\"D\",\"deviceItemName\":\"CPU\"},\"inventory\":{\"plcName\":\"PLC\",\"programBlocks\":[],\"tagTables\":[],\"dataTypes\":[],\"diagnostics\":[],\"dataBlockStructures\":[],\"dataBlockStructuresIncluded\":false}}}";
+            return "{\"schemaVersion\":\"1.2\",\"generatorVersion\":\"0.6.1\",\"exportedAtUtc\":\"2026-07-23T20:00:00Z\",\"project\":{\"name\":\"P\",\"sourceFileName\":\"P.ap15_1\",\"selectedPlc\":{\"name\":\"PLC\",\"deviceName\":\"D\",\"deviceItemName\":\"CPU\"},\"inventory\":{\"plcName\":\"PLC\",\"programBlocks\":[],\"tagTables\":[],\"dataTypes\":[],\"diagnostics\":[],\"dataBlockStructures\":[],\"dataBlockStructuresIncluded\":false,\"blockCalls\":[],\"blockCallsIncluded\":false}}}";
         }
 
         private sealed class TestDirectory : IDisposable

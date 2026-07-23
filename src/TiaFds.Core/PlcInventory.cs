@@ -15,7 +15,9 @@ namespace TiaFds.Core
             IReadOnlyList<PlcDataTypeInfo> dataTypes,
             IReadOnlyList<InventoryDiagnostic> diagnostics,
             IReadOnlyList<DataBlockStructureInfo> dataBlockStructures,
-            bool dataBlockStructuresIncluded)
+            bool dataBlockStructuresIncluded,
+            IReadOnlyList<BlockCallInfo> blockCalls,
+            bool blockCallsIncluded)
         {
             PlcName = plcName;
             ProgramBlocks = Copy(programBlocks);
@@ -24,6 +26,8 @@ namespace TiaFds.Core
             Diagnostics = Copy(diagnostics);
             DataBlockStructures = CopyAndSortDataBlockStructures(dataBlockStructures);
             DataBlockStructuresIncluded = dataBlockStructuresIncluded;
+            BlockCalls = CopyAndSortBlockCalls(blockCalls);
+            BlockCallsIncluded = blockCallsIncluded;
             ProgramBlockCategories = CountBlockCategories(ProgramBlocks);
         }
 
@@ -33,7 +37,20 @@ namespace TiaFds.Core
             IReadOnlyList<PlcTagTableInfo> tagTables,
             IReadOnlyList<PlcDataTypeInfo> dataTypes,
             IReadOnlyList<InventoryDiagnostic> diagnostics)
-            : this(plcName, programBlocks, tagTables, dataTypes, diagnostics, null, false)
+            : this(plcName, programBlocks, tagTables, dataTypes, diagnostics, null, false, null, false)
+        {
+        }
+
+        public PlcInventory(
+            string plcName,
+            IReadOnlyList<ProgramBlockInfo> programBlocks,
+            IReadOnlyList<PlcTagTableInfo> tagTables,
+            IReadOnlyList<PlcDataTypeInfo> dataTypes,
+            IReadOnlyList<InventoryDiagnostic> diagnostics,
+            IReadOnlyList<DataBlockStructureInfo> dataBlockStructures,
+            bool dataBlockStructuresIncluded)
+            : this(plcName, programBlocks, tagTables, dataTypes, diagnostics,
+                dataBlockStructures, dataBlockStructuresIncluded, null, false)
         {
         }
 
@@ -57,6 +74,12 @@ namespace TiaFds.Core
 
         [JsonProperty("dataBlockStructuresIncluded")]
         public bool DataBlockStructuresIncluded { get; }
+
+        [JsonProperty("blockCalls")]
+        public IReadOnlyList<BlockCallInfo> BlockCalls { get; }
+
+        [JsonProperty("blockCallsIncluded")]
+        public bool BlockCallsIncluded { get; }
 
         public IReadOnlyList<ProgramBlockCategoryCount> ProgramBlockCategories { get; }
 
@@ -126,6 +149,31 @@ namespace TiaFds.Core
             }
 
             return categories.ToArray();
+        }
+
+        private static IReadOnlyList<BlockCallInfo> CopyAndSortBlockCalls(IReadOnlyList<BlockCallInfo> source)
+        {
+            if (source == null || source.Count == 0) return new BlockCallInfo[0];
+            var copy = new List<BlockCallInfo>(source);
+            copy.Sort((left, right) =>
+            {
+                int result = CompareNullable(left.CallingBlockNumber, right.CallingBlockNumber);
+                if (result != 0) return result;
+                result = StringComparer.Ordinal.Compare(left.CallingBlockName ?? string.Empty, right.CallingBlockName ?? string.Empty);
+                if (result != 0) return result;
+                result = CompareNullable(left.NetworkNumber, right.NetworkNumber);
+                if (result != 0) return result;
+                result = left.CallOrdinal.CompareTo(right.CallOrdinal);
+                return result != 0 ? result : StringComparer.Ordinal.Compare(left.CalledBlockName ?? string.Empty, right.CalledBlockName ?? string.Empty);
+            });
+            return copy.ToArray();
+        }
+
+        private static int CompareNullable(int? left, int? right)
+        {
+            if (left.HasValue && right.HasValue) return left.Value.CompareTo(right.Value);
+            if (left.HasValue) return -1;
+            return right.HasValue ? 1 : 0;
         }
     }
 }
