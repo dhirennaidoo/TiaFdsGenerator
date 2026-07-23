@@ -42,7 +42,13 @@ namespace TiaFds.Analysis
                 Definition("Valve", "cm.VlvType1", null, "VlvType1", "Udt.cm.Vlv"),
                 Definition("DigitalInput", "cm.LimType0", null, "LimType0", "Udt.cm.DI"),
                 Definition("DigitalInput", "cm.LimType1", null, "LimType1", "Udt.cm.DI"),
-                Definition("DigitalInput", "cm.LimType2", null, "LimType2", "Udt.cm.DI")
+                Definition("DigitalInput", "cm.LimType2", null, "LimType2", "Udt.cm.DI"),
+                Definition("AnalogueInput", "cm.AI", null, "AI", "Udt.cm.AI"),
+                Definition("AnalogueOutput", "cm.AO", null, "AO", "Udt.cm.AO", "AOut"),
+                Definition("DigitalOutput", "cm.DOType0", null, "DOType0", "Udt.cm.DO", "Ctrl"),
+                Definition("DigitalOutput", "cm.DOType1", null, "DOType1", "Udt.cm.DO", "Ctrl"),
+                Definition("Speed", "cm.SpdType0", null, "SpdType0", "Udt.cm.Spd"),
+                Definition("Speed", "cm.SpdType1", null, "SpdType1", "Udt.cm.Spd")
             };
 
         public static IReadOnlyList<ControlModuleFunctionDefinition> Definitions => Items;
@@ -57,9 +63,18 @@ namespace TiaFds.Analysis
         private static ControlModuleFunctionDefinition Definition(
             string family, string name, int? number, string variant, string dataType)
         {
+            return Definition(family, name, number, variant, dataType, null);
+        }
+
+        private static ControlModuleFunctionDefinition Definition(
+            string family, string name, int? number, string variant, string dataType,
+            string additionalCandidateName)
+        {
+            var names = new List<string> { "Module", "CM", "Drv", "Data", "Instance" };
+            if (!string.IsNullOrWhiteSpace(additionalCandidateName)) names.Add(additionalCandidateName);
             return new ControlModuleFunctionDefinition(
                 family, name, number, variant, dataType,
-                new[] { "Module", "CM", "Drv", "Data", "Instance" });
+                names.ToArray());
         }
     }
 }

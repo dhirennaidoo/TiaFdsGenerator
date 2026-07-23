@@ -39,6 +39,97 @@ namespace TiaFds.Core.Tests
             Assert.AreEqual(ControlModuleImplementationStatus.Correlated, result.Modules[0].Status);
         }
 
+        [DataTestMethod]
+        [DataRow("cm.AI", "AnalogueInput", "db.cm.AI", "BP_JT16014", "Udt.cm.AI", "AI", "Module")]
+        [DataRow("cm.AO", "AnalogueOutput", "db.cm.AO", "BP_OP16008", "Udt.cm.AO", "AO", "AOut")]
+        [DataRow("cm.DOType0", "DigitalOutput", "db.cm.DO", "BP_WE16134", "Udt.cm.DO", "DOType0", "Ctrl")]
+        [DataRow("cm.DOType1", "DigitalOutput", "db.cm.DO", "BP_WE16134", "Udt.cm.DO", "DOType1", "Ctrl")]
+        [DataRow("cm.SpdType0", "Speed", "db.cm.Spd", "BP_SS16008", "Udt.cm.Spd", "SpdType0", "Module")]
+        [DataRow("cm.SpdType1", "Speed", "db.cm.Spd", "BP_SS16008", "Udt.cm.Spd", "SpdType1", "Module")]
+        public void Analyze_CorrelatesNewFamiliesByDatatypeAndResolvedPath(
+            string function, string family, string db, string name,
+            string dataType, string variant, string formalName)
+        {
+            string path = db + "." + name;
+            BlockCallInfo call = FamilyCall(function, formalName, dataType, path, 1, "Unrelated title");
+            ControlModuleImplementationResult result = Analyze(
+                Snapshot(true, true, new[] { call }, Module(db, name, dataType)));
+            Assert.AreEqual(family, result.Modules[0].ModuleFamily);
+            Assert.AreEqual(ControlModuleImplementationStatus.Correlated, result.Modules[0].Status);
+            Assert.AreEqual(variant, result.Modules[0].CallSites[0].ProcessingVariant);
+            Assert.AreEqual(path, result.Modules[0].MemberPath);
+        }
+
+        [TestMethod]
+        public void Analyze_NewFamilyMismatchAndMissingOperandNeverInferFromNetworkTitle()
+        {
+            BlockCallInfo mismatch = FamilyCall(
+                "cm.DOType1", "Ctrl", "Udt.cm.DO",
+                "db.cm.Drv.BP_M16006", 1, "BP_M16006");
+            ControlModuleImplementationResult mismatchResult = Analyze(
+                Snapshot(true, true, new[] { mismatch },
+                    Module("db.cm.Drv", "BP_M16006", "Udt.cm.Drv")));
+            Assert.AreEqual(ControlModuleImplementationStatus.FamilyMismatch,
+                mismatchResult.Modules[0].Status);
+            HasDiagnostic(mismatchResult, "CM106_MODULE_FAMILY_MISMATCH");
+
+            var unresolved = new BlockCallInfo("Main", 100, "Function", "Blocks/Main",
+                "cm.AI", null, "Function", null, "BP_JT16014", 1,
+                new[] { Parameter("Module", "InOut", "Udt.cm.AI", null, null) }, null);
+            ControlModuleImplementationResult unresolvedResult = Analyze(
+                Snapshot(true, true, new[] { unresolved },
+                    Module("db.cm.AI", "BP_JT16014", "Udt.cm.AI")));
+            Assert.AreEqual(ControlModuleImplementationStatus.Unreferenced,
+                unresolvedResult.Modules[0].Status);
+            Assert.AreEqual(0, unresolvedResult.Modules[0].CallSites.Count);
+            HasDiagnostic(unresolvedResult, "CM104_ACTUAL_PARAMETER_NOT_RESOLVED");
+        }
+
+        [TestMethod]
+        public void Analyze_SevenFamilyIntegrationPreservesBpM6019AndSpareAsUnreferenced()
+        {
+            var members = new[]
+            {
+                Module("db.cm.AI", "BP_JT16014", "Udt.cm.AI"),
+                Module("db.cm.AO", "BP_OP16008", "Udt.cm.AO"),
+                Module("db.cm.DO", "BP_WE16134", "Udt.cm.DO"),
+                Module("db.cm.DI", "BP_FS16008a", "Udt.cm.DI"),
+                Module("db.cm.Drv", "BP_M16001", "Udt.cm.Drv"),
+                Module("db.cm.Drv", "BP_M6019", "Udt.cm.Drv"),
+                Module("db.cm.Spd", "BP_SS16008", "Udt.cm.Spd"),
+                Module("db.cm.Vlv", "BP_V16101", "Udt.cm.Vlv"),
+                Module("db.cm.Vlv", "Spare041", "Udt.cm.Vlv")
+            };
+            var calls = new[]
+            {
+                FamilyCall("cm.AI", "Module", "Udt.cm.AI", "db.cm.AI.BP_JT16014", 1, null),
+                FamilyCall("cm.AO", "AOut", "Udt.cm.AO", "db.cm.AO.BP_OP16008", 2, null),
+                FamilyCall("cm.DOType1", "Ctrl", "Udt.cm.DO", "db.cm.DO.BP_WE16134", 3, null),
+                FamilyCall("cm.LimType1", "Module", "Udt.cm.DI", "db.cm.DI.BP_FS16008A", 4, null),
+                FamilyCall("cm.DrvType1", "Drv", "Udt.cm.Drv", "db.cm.Drv.BP_M16001", 5, null),
+                FamilyCall("cm.SpdType0", "Module", "Udt.cm.Spd", "db.cm.Spd.BP_SS16008", 6, null),
+                FamilyCall("cm.VlvType1", "Module", "Udt.cm.Vlv", "db.cm.Vlv.BP_V16101", 7, null)
+            };
+            ControlModuleImplementationResult result = Analyze(MultiFamilySnapshot(members, calls));
+
+            foreach (string family in new[]
+                { "AnalogueInput", "AnalogueOutput", "DigitalInput", "DigitalOutput", "Drive", "Speed", "Valve" })
+                Assert.IsTrue(result.Modules.Any(module =>
+                    module.ModuleFamily == family &&
+                    module.Status == ControlModuleImplementationStatus.Correlated), family);
+            Assert.AreEqual(ControlModuleImplementationStatus.Unreferenced,
+                result.Modules.Single(module => module.MemberPath == "db.cm.Drv.BP_M6019").Status);
+            Assert.AreEqual(ControlModuleImplementationStatus.Unreferenced,
+                result.Modules.Single(module => module.MemberPath == "db.cm.Vlv.Spare041").Status);
+
+            var output = new StringWriter();
+            new ControlModuleImplementationConsoleRenderer().PrintSummary(output, result);
+            string text = output.ToString();
+            foreach (string variant in new[]
+                { "AnalogueInput / AI", "AnalogueOutput / AO", "DigitalOutput / DOType1", "Speed / SpdType0" })
+                StringAssert.Contains(text, variant);
+        }
+
         [TestMethod]
         public void Analyze_ReportsMissingInputsUnresolvedMissingParameterAndMissingPath()
         {
@@ -174,10 +265,43 @@ namespace TiaFds.Core.Tests
                 new[] { Parameter("Module", "InOut", FunctionType(function), actual, resolved) }, null);
         }
 
+        private static BlockCallInfo FamilyCall(
+            string function, string formalName, string dataType,
+            string resolvedPath, int ordinal, string networkTitle)
+        {
+            return new BlockCallInfo("Main", 100, "Function", "Blocks/Main",
+                function, null, "Function", null, networkTitle, ordinal,
+                new[] { Parameter(formalName, "InOut", dataType,
+                    "\"" + resolvedPath.Substring(0, resolvedPath.LastIndexOf('.')) + "\"." +
+                    resolvedPath.Substring(resolvedPath.LastIndexOf('.') + 1),
+                    resolvedPath) }, null);
+        }
+
+        private static EngineeringSnapshot MultiFamilySnapshot(
+            DataBlockMemberInfo[] members,
+            BlockCallInfo[] calls)
+        {
+            var groups = members.GroupBy(member =>
+                member.MemberPath.Substring(0, member.MemberPath.LastIndexOf('.')),
+                StringComparer.OrdinalIgnoreCase);
+            var structures = groups.Select(group =>
+                new DataBlockStructureInfo(group.Key, null, "Blocks", group.ToArray(), null)).ToArray();
+            var inventory = new PlcInventory("PLC", new ProgramBlockInfo[0],
+                new PlcTagTableInfo[0], new PlcDataTypeInfo[0], new InventoryDiagnostic[0],
+                structures, true, calls, true);
+            return new EngineeringSnapshot(SnapshotSchema.CurrentVersion, ProductVersion.Current,
+                DateTimeOffset.UtcNow, new ProjectSnapshot("P", "P.ap15_1", null,
+                    new PlcInfo("PLC", "D", "CPU"), inventory));
+        }
+
         private static string FunctionType(string function)
         {
             if (function.IndexOf("Vlv", StringComparison.OrdinalIgnoreCase) >= 0) return "Udt.cm.Vlv";
             if (function.IndexOf("Lim", StringComparison.OrdinalIgnoreCase) >= 0) return "Udt.cm.DI";
+            if (string.Equals(function, "cm.AI", StringComparison.OrdinalIgnoreCase)) return "Udt.cm.AI";
+            if (string.Equals(function, "cm.AO", StringComparison.OrdinalIgnoreCase)) return "Udt.cm.AO";
+            if (function.IndexOf("DOType", StringComparison.OrdinalIgnoreCase) >= 0) return "Udt.cm.DO";
+            if (function.IndexOf("SpdType", StringComparison.OrdinalIgnoreCase) >= 0) return "Udt.cm.Spd";
             return "Udt.cm.Drv";
         }
 

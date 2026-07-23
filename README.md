@@ -166,6 +166,12 @@ Function name is the primary identity. Expected FC numbers validate known drive 
 | Valve | `cm.VlvType0` | — | VlvType0 | `Udt.cm.Vlv` |
 | Valve | `cm.VlvType1` | — | VlvType1 | `Udt.cm.Vlv` |
 | DigitalInput | `cm.LimType0..2` | — | LimType0..2 | `Udt.cm.DI` |
+| AnalogueInput | `cm.AI` | — | AI | `Udt.cm.AI` |
+| AnalogueOutput | `cm.AO` | — | AO | `Udt.cm.AO` |
+| DigitalOutput | `cm.DOType0` | — | DOType0 | `Udt.cm.DO` |
+| DigitalOutput | `cm.DOType1` | — | DOType1 | `Udt.cm.DO` |
+| Speed | `cm.SpdType0` | — | SpdType0 | `Udt.cm.Spd` |
+| Speed | `cm.SpdType1` | — | SpdType1 | `Udt.cm.Spd` |
 
 A changed drive FC number produces `CM113_FUNCTION_NUMBER_MISMATCH` but the name-matched call evidence is retained.
 
