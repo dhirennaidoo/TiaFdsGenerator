@@ -22,6 +22,18 @@ namespace TiaFds.Reporting
             writer.WriteLine("  Unsupported calls: {0,5}", summary.UnsupportedCallModules);
             writer.WriteLine("  Family mismatch:   {0,5}", summary.FamilyMismatchModules);
             writer.WriteLine();
+            AnalysisBehaviourSummary behaviour = report.BehaviourSummary;
+            writer.WriteLine("Behavioural conditions:");
+            writer.WriteLine("  Total:             {0,5}", behaviour.TotalConditionCount);
+            writer.WriteLine("  Start commands:    {0,5}", behaviour.StartCommandCount);
+            writer.WriteLine("  Control requests:  {0,5}", behaviour.ControlRequestCount);
+            writer.WriteLine("  Interlocks:        {0,5}", behaviour.InterlockCount);
+            writer.WriteLine("  Complete:          {0,5}", behaviour.CompleteCount);
+            writer.WriteLine("  Partial:           {0,5}", behaviour.PartialCount);
+            writer.WriteLine("  Unsupported:       {0,5}", behaviour.UnsupportedCount);
+            writer.WriteLine("  Unresolved:        {0,5}", behaviour.UnresolvedCount);
+            writer.WriteLine("  Ambiguous:         {0,5}", behaviour.AmbiguousCount);
+            writer.WriteLine();
             writer.WriteLine("Processing variants:");
             if (report.ProcessingVariants.Count == 0) writer.WriteLine("  None");
             foreach (AnalysisVariantSummary variant in report.ProcessingVariants)

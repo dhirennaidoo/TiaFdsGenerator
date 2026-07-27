@@ -22,5 +22,9 @@
       <Link>TestData\sanitized-fc501-first-call.xml</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\TestData\sanitized-behaviour-lad.xml">
+      <Link>TestData\sanitized-behaviour-lad.xml</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

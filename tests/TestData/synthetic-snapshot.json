@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.2",
+  "schemaVersion": "1.3",
   "generatorVersion": "0.6.1",
   "exportedAtUtc": "2026-07-23T20:00:00Z",
   "project": {
@@ -154,7 +154,91 @@
           "diagnostics": []
         }
       ],
-      "blockCallsIncluded": true
+      "blockCallsIncluded": true,
+      "logicAssignments": [
+        {
+          "destinationExpression": "\"db.cm.Drv\".BP_M16006.SA",
+          "resolvedDestinationPath": "db.cm.Drv.BP_M16006.SA",
+          "sourceExpression": {
+            "kind": "And",
+            "displayText": "AutoMode AND (SequenceRequest OR ManualStart)",
+            "children": [
+              {
+                "kind": "Operand",
+                "displayText": "db.Mode.Auto",
+                "resolvedPath": "db.Mode.Auto",
+                "children": []
+              },
+              {
+                "kind": "Or",
+                "displayText": "SequenceRequest OR ManualStart",
+                "children": [
+                  {
+                    "kind": "Operand",
+                    "displayText": "db.Sequence.Request",
+                    "resolvedPath": "db.Sequence.Request",
+                    "children": []
+                  },
+                  {
+                    "kind": "Operand",
+                    "displayText": "db.Manual.Start",
+                    "resolvedPath": "db.Manual.Start",
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          "originalSourceText": "AutoMode AND (SequenceRequest OR ManualStart)",
+          "blockName": "ProcessDrives",
+          "blockNumber": 100,
+          "blockType": "Function",
+          "blockLanguage": "LAD",
+          "networkNumber": 140,
+          "networkTitle": "Automatic start",
+          "networkComment": "Sanitized representative condition.",
+          "statementOrder": 1,
+          "resolutionStatus": "Complete"
+        },
+        {
+          "destinationExpression": "db.cm.Drv.DriveArray.CR2",
+          "resolvedDestinationPath": "db.cm.Drv.DriveArray.CR2",
+          "sourceExpression": {
+            "kind": "Constant",
+            "displayText": "TRUE",
+            "constantValue": true,
+            "children": []
+          },
+          "originalSourceText": "TRUE",
+          "blockName": "ProcessDrives",
+          "blockNumber": 100,
+          "blockType": "Function",
+          "blockLanguage": "LAD",
+          "networkNumber": 141,
+          "networkTitle": "Control request",
+          "statementOrder": 2,
+          "resolutionStatus": "Complete"
+        },
+        {
+          "destinationExpression": "db.cm.Drv.M16007.ILK[3]",
+          "resolvedDestinationPath": "db.cm.Drv.M16007.ILK[3]",
+          "sourceExpression": {
+            "kind": "Operand",
+            "displayText": "@IndirectInterlock",
+            "children": []
+          },
+          "originalSourceText": "@IndirectInterlock",
+          "blockName": "ProcessDrives",
+          "blockNumber": 100,
+          "blockType": "Function",
+          "blockLanguage": "LAD",
+          "networkNumber": 142,
+          "networkTitle": "Interlock requires review",
+          "statementOrder": 3,
+          "resolutionStatus": "Partial"
+        }
+      ],
+      "logicAssignmentsIncluded": true
     }
   }
 }

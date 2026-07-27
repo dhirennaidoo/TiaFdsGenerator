@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using TiaFds.Core;
 using TiaFds.Analysis;
 using TiaFds.Reporting;
@@ -78,8 +79,11 @@ namespace TiaFds.Cli
                         return 6;
                     }
 
+                    ControlModuleBehaviourResult behaviour =
+                        new ControlModuleBehaviourAnalyzer().Analyze(
+                            snapshot, discovery, implementation);
                     AnalysisReport report = new AnalysisReportBuilder().Build(
-                        snapshot, discovery, implementation);
+                        snapshot, discovery, implementation, behaviour);
                     var implementationRenderer = new AnalysisReportConsoleRenderer();
                     Console.WriteLine();
                     implementationRenderer.PrintSummary(Console.Out, report);
@@ -90,6 +94,17 @@ namespace TiaFds.Cli
                             ModuleName = options.ModuleName,
                             ImplementationStatus = status
                         });
+
+                    if (options.ReportJson != null)
+                    {
+                        new AnalysisReportJsonWriter().Write(report, options.ReportJson);
+                        Console.WriteLine("JSON report: {0}", Path.GetFullPath(options.ReportJson));
+                    }
+                    if (options.ReportExcel != null)
+                    {
+                        new AnalysisReportExcelWriter().Write(report, options.ReportExcel);
+                        Console.WriteLine("Excel report: {0}", Path.GetFullPath(options.ReportExcel));
+                    }
                 }
                 return 0;
             }
@@ -97,6 +112,11 @@ namespace TiaFds.Cli
             {
                 Console.Error.WriteLine("Error: {0}", exception.Message);
                 return 4;
+            }
+            catch (AnalysisReportWriteException exception)
+            {
+                Console.Error.WriteLine("Error: {0}", exception.Message);
+                return 7;
             }
             catch (Exception exception)
             {

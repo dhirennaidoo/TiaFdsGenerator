@@ -53,7 +53,23 @@ Only `TiaFds.Openness` references `Siemens.Engineering`. `TiaFds.Openness.Xml` s
 
 `TiaFds.Reporting` converts the completed discovery and implementation results into an immutable, deterministic `AnalysisReport`. The report owns copies of module declarations, implementation statuses, call sites, family and processing-variant summaries, individual and grouped diagnostics, and manual-review items. It does not perform extraction or correlation.
 
-The module-call CLI path builds this report and uses `AnalysisReportConsoleRenderer` for summary and detail output. This stable reporting boundary is intended for later JSON, Excel, FDS, and project-comparison consumers; those exporters are not implemented yet.
+The module-call CLI path builds this report once and passes the same instance to the console, JSON, and Excel renderers. Reporting does not repeat extraction, discovery, correlation, or summary calculations.
+
+## JSON and Excel reports
+
+Reporting runs offline from an extracted `EngineeringSnapshot` and does not require TIA Portal or Siemens assemblies. Request either or both output formats while running module-call analysis:
+
+```bat
+TiaFds.Cli.exe ^
+  --import-json "C:\Exports\BP_PLC.0.6.0.json" ^
+  --analyze-module-calls ^
+  --report-json "C:\Reports\AnalysisReport.json" ^
+  --report-excel "C:\Reports\AnalysisReport.xlsx"
+```
+
+Output paths are explicit; parent directories are created and existing files are overwritten. The CLI prints each successfully generated absolute path. A write failure names the affected path and returns exit code `7`.
+
+The JSON reporting schema is `1.1`. The workbook contains these worksheets in order: `Summary`, `Modules`, `Processing Calls`, `Behavioural Conditions`, `Diagnostics`, and `Manual Review`. It uses filterable tables and preserves project text as text so formula-like engineering values are not evaluated by Excel.
 
 ## Prerequisites and Siemens reference
 
@@ -75,11 +91,14 @@ dotnet test .\tests\TiaFds.Core.Tests\TiaFds.Core.Tests.csproj --configuration D
 
 All automated tests use synthetic snapshots and XML. They require no TIA installation or customer project.
 
-## Snapshot schema 1.2
+## Snapshot schema 1.3
 
-Application version and schema version are independent: application 0.6.1 writes schema `1.2`.
+Application version and schema version are independent. Schema `1.3` extends
+the existing `1.2` block-call contract with neutral PLC logic assignments and
+boolean expression trees. Readers remain compatible with schemas `1.0` through
+`1.2`.
 
-Schema 1.2 retains the 1.1 DB-declaration contract and adds:
+Schema 1.2 retained the 1.1 DB-declaration contract and added:
 
 - `inventory.blockCallsIncluded`
 - `inventory.blockCalls`
@@ -88,7 +107,34 @@ Schema 1.2 retains the 1.1 DB-declaration contract and adds:
 - generic formal parameter name, direction, datatype, actual expression, and resolved member path
 - per-call extraction/parsing diagnostics
 
-Readers remain compatible with schema 1.1 and normalize missing calls to an empty, not-included collection. Schema 1.0 also remains readable. Unsupported schema versions are rejected clearly. Raw XML, temporary paths, Siemens objects, handles, and runtime references are never serialized.
+Schema 1.3 additionally writes `inventory.logicAssignmentsIncluded` and
+`inventory.logicAssignments`. Assignments preserve destination, source
+expression tree, operands, resolved paths, statement order, block language,
+and network metadata. Missing logic in older snapshots normalizes to an empty,
+not-included collection. Raw XML, temporary paths, Siemens objects, handles,
+and runtime references are never serialized.
+
+## Behavioural conditions
+
+When `--include-block-calls` is used, the same exported LAD/FBD XML is also
+examined for neutral boolean assignments. Offline analysis recognizes exact
+SA (start command), CR (control request), and ILK (interlock) members and
+correlates them to modules by resolved member-path ownership.
+
+Supported expressions preserve operands, TRUE/FALSE constants, contact
+negation, AND/OR/NOT grouping, and one unambiguous prior local-temporary
+assignment. Partial, unsupported, unresolved, and ambiguous conditions are
+retained with `BEH...` diagnostics and manual-review entries. No condition is
+inferred from a network title.
+
+`AnalysisReport.json` schema `1.1` adds `behaviourSummary`,
+`behaviouralConditions`, module-level `startCommands`, `controlRequests`, and
+`interlocks`. Excel adds `Behavioural Conditions` between `Processing Calls`
+and `Diagnostics`; Summary and Modules include behavioural counts. Console
+output remains summary-only. FDS prose generation is not implemented.
+
+The supported boundary and the real FC501 pattern are documented in
+[`docs/behavioural-analysis.md`](docs/behavioural-analysis.md).
 
 ## TIA extraction
 

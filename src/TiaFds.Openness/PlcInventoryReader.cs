@@ -42,6 +42,7 @@ namespace TiaFds.Openness
             if (includeBlockCalls)
             {
                 builder.MarkBlockCallsIncluded();
+                builder.MarkLogicAssignmentsIncluded();
                 ReadBlockCalls(plcSoftware, builder);
             }
 
@@ -134,6 +135,8 @@ namespace TiaFds.Openness
                 BlockCallParseResult parsed = new BlockCallXmlParser().Parse(
                     exportPath, name, number, blockType, path, language, knownMemberPaths);
                 foreach (BlockCallInfo call in parsed.Calls) builder.AddBlockCall(call);
+                foreach (ExtractedLogicAssignment assignment in parsed.Assignments)
+                    builder.AddLogicAssignment(assignment);
                 foreach (InventoryDiagnostic diagnostic in parsed.Diagnostics) builder.AddDiagnostic(diagnostic);
             }
             catch (Exception exception)

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Document>
+  <SW.Blocks.CompileUnit Number="1">
+    <AttributeList>
+      <NetworkSource>
+        <FlgNet>
+          <Parts>
+            <Access Scope="GlobalVariable" UId="1"><Symbol><Component Name="db.Auto" /><Component Name="Enabled" /></Symbol></Access>
+            <Access Scope="GlobalVariable" UId="2"><Symbol><Component Name="db.Sequence" /><Component Name="Request" /></Symbol></Access>
+            <Access Scope="GlobalVariable" UId="3"><Symbol><Component Name="db.cm.Drv" /><Component Name="M1" /><Component Name="SA1" /></Symbol></Access>
+            <Part Name="Contact" UId="10"><Negated Name="operand" /></Part>
+            <Part Name="Contact" UId="11" />
+            <Part Name="O" UId="12"><TemplateValue Name="Card">2</TemplateValue></Part>
+            <Part Name="Coil" UId="13" />
+          </Parts>
+          <Wires>
+            <Wire><Powerrail /><NameCon UId="10" Name="in" /><NameCon UId="11" Name="in" /></Wire>
+            <Wire><IdentCon UId="1" /><NameCon UId="10" Name="operand" /></Wire>
+            <Wire><NameCon UId="10" Name="out" /><NameCon UId="12" Name="in1" /></Wire>
+            <Wire><IdentCon UId="2" /><NameCon UId="11" Name="operand" /></Wire>
+            <Wire><NameCon UId="11" Name="out" /><NameCon UId="12" Name="in2" /></Wire>
+            <Wire><NameCon UId="12" Name="out" /><NameCon UId="13" Name="in" /></Wire>
+            <Wire><IdentCon UId="3" /><NameCon UId="13" Name="operand" /></Wire>
+          </Wires>
+        </FlgNet>
+      </NetworkSource>
+    </AttributeList>
+    <ObjectList>
+      <MultilingualText CompositionName="Title"><ObjectList><MultilingualTextItem><AttributeList><Text>Automatic start</Text></AttributeList></MultilingualTextItem></ObjectList></MultilingualText>
+      <MultilingualText CompositionName="Comment"><ObjectList><MultilingualTextItem><AttributeList><Text>Real FC501 coil/contact/or shape, sanitized.</Text></AttributeList></MultilingualTextItem></ObjectList></MultilingualText>
+    </ObjectList>
+  </SW.Blocks.CompileUnit>
+  <SW.Blocks.CompileUnit Number="2">
+    <AttributeList>
+      <NetworkSource>
+        <FlgNet>
+          <Parts>
+            <Access Scope="LiteralConstant" UId="20"><Constant><ConstantValue>TRUE</ConstantValue></Constant></Access>
+            <Access Scope="GlobalVariable" UId="21"><Symbol><Component Name="db.cm.Drv" /><Component Name="M1" /><Component Name="CR2" /></Symbol></Access>
+            <Part Name="Coil" UId="22" />
+          </Parts>
+          <Wires>
+            <Wire><IdentCon UId="20" /><NameCon UId="22" Name="in" /></Wire>
+            <Wire><IdentCon UId="21" /><NameCon UId="22" Name="operand" /></Wire>
+          </Wires>
+        </FlgNet>
+      </NetworkSource>
+    </AttributeList>
+    <ObjectList><MultilingualText CompositionName="Title"><ObjectList><MultilingualTextItem><AttributeList><Text>Control request</Text></AttributeList></MultilingualTextItem></ObjectList></MultilingualText></ObjectList>
+  </SW.Blocks.CompileUnit>
+  <SW.Blocks.CompileUnit Number="3">
+    <AttributeList>
+      <NetworkSource>
+        <FlgNet>
+          <Parts>
+            <Access Scope="GlobalVariable" UId="30"><Symbol><Component Name="db.cm.Drv" /><Component Name="M1" /><Component Name="ILK3" /></Symbol></Access>
+            <Part Name="UnsupportedTimer" UId="31" />
+            <Part Name="Coil" UId="32" />
+          </Parts>
+          <Wires>
+            <Wire><Powerrail /><NameCon UId="31" Name="in" /></Wire>
+            <Wire><NameCon UId="31" Name="out" /><NameCon UId="32" Name="in" /></Wire>
+            <Wire><IdentCon UId="30" /><NameCon UId="32" Name="operand" /></Wire>
+          </Wires>
+        </FlgNet>
+      </NetworkSource>
+    </AttributeList>
+    <ObjectList><MultilingualText CompositionName="Title"><ObjectList><MultilingualTextItem><AttributeList><Text>Unsupported interlock</Text></AttributeList></MultilingualTextItem></ObjectList></MultilingualText></ObjectList>
+  </SW.Blocks.CompileUnit>
+</Document>

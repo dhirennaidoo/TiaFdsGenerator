@@ -12,13 +12,28 @@ namespace TiaFds.Reporting
             ControlModuleDiscoveryResult discovery,
             ControlModuleImplementationResult implementation)
         {
+            return Build(snapshot, discovery, implementation,
+                new ControlModuleBehaviourResult(null, null, null, false));
+        }
+
+        public AnalysisReport Build(
+            EngineeringSnapshot snapshot,
+            ControlModuleDiscoveryResult discovery,
+            ControlModuleImplementationResult implementation,
+            ControlModuleBehaviourResult behaviour)
+        {
             if (snapshot == null) throw new ArgumentNullException(nameof(snapshot));
             if (discovery == null) throw new ArgumentNullException(nameof(discovery));
             if (implementation == null) throw new ArgumentNullException(nameof(implementation));
+            if (behaviour == null) throw new ArgumentNullException(nameof(behaviour));
+
+            var behaviourConditions = new List<AnalysisBehaviouralCondition>();
+            foreach (BehaviouralCondition condition in behaviour.Conditions)
+                behaviourConditions.Add(CopyBehaviourCondition(condition, behaviour.Diagnostics));
 
             var modules = new List<AnalysisModule>();
             foreach (ControlModuleImplementation source in implementation.Modules)
-                modules.Add(CopyModule(source));
+                modules.Add(CopyModule(source, behaviourConditions));
             modules.Sort(CompareModules);
 
             var diagnostics = new List<AnalysisDiagnostic>();
@@ -33,6 +48,27 @@ namespace TiaFds.Reporting
                 if (string.Equals(source.Severity, "Error", StringComparison.OrdinalIgnoreCase)) errors++;
                 else warnings++;
                 string key = (source.Code ?? string.Empty) + "\u001f" + (source.Severity ?? string.Empty);
+                DiagnosticAccumulator accumulator;
+                if (!diagnosticCounts.TryGetValue(key, out accumulator))
+                {
+                    accumulator = new DiagnosticAccumulator(source.Code, source.Severity);
+                    diagnosticCounts.Add(key, accumulator);
+                }
+                accumulator.Count++;
+            }
+            int baselineWarnings = warnings;
+            int baselineErrors = errors;
+            foreach (BehaviouralDiagnostic source in behaviour.Diagnostics)
+            {
+                var diagnostic = new AnalysisDiagnostic(
+                    source.Severity, source.Code,
+                    source.ModulePath ?? source.BlockName, source.Message);
+                diagnostics.Add(diagnostic);
+                if (string.Equals(source.Severity, "Error",
+                    StringComparison.OrdinalIgnoreCase)) errors++;
+                else warnings++;
+                string key = (source.Code ?? string.Empty) + "\u001f" +
+                    (source.Severity ?? string.Empty);
                 DiagnosticAccumulator accumulator;
                 if (!diagnosticCounts.TryGetValue(key, out accumulator))
                 {
@@ -62,8 +98,8 @@ namespace TiaFds.Reporting
                 diagnosticSummary.Add(new AnalysisDiagnosticSummary(item.Code, item.Severity, item.Count));
             diagnosticSummary.Sort((left, right) =>
             {
-                int result = CompareText(left.Code, right.Code);
-                return result != 0 ? result : CompareText(left.Severity, right.Severity);
+                int result = AnalysisReportOrdering.CompareSeverity(left.Severity, right.Severity);
+                return result != 0 ? result : AnalysisReportOrdering.CompareText(left.Code, right.Code);
             });
 
             var variantSummary = new List<AnalysisVariantSummary>();
@@ -71,8 +107,12 @@ namespace TiaFds.Reporting
                 variantSummary.Add(new AnalysisVariantSummary(item.Family, item.Variant, item.Count));
             variantSummary.Sort((left, right) =>
             {
-                int result = CompareText(left.ModuleFamily, right.ModuleFamily);
-                return result != 0 ? result : CompareText(left.ProcessingVariant, right.ProcessingVariant);
+                int result = AnalysisReportOrdering.CompareFamily(
+                    left.ModuleFamily, right.ModuleFamily);
+                return result != 0
+                    ? result
+                    : AnalysisReportOrdering.CompareText(
+                        left.ProcessingVariant, right.ProcessingVariant);
             });
 
             IReadOnlyList<AnalysisFamilySummary> families = BuildFamilySummaries(modules);
@@ -82,6 +122,17 @@ namespace TiaFds.Reporting
                     manualReview.Add(new ManualReviewItem(
                         module.ModuleFamily, module.ModuleName, module.MemberPath,
                         module.ImplementationStatus, ReviewReason(module.ImplementationStatus)));
+            manualReview.Sort(CompareManualReview);
+            var behaviourReview = new List<AnalysisBehaviourManualReviewItem>();
+            foreach (BehaviouralManualReviewItem item in behaviour.ManualReview)
+                behaviourReview.Add(new AnalysisBehaviourManualReviewItem(
+                    item.Code, item.ModuleFamily, item.ModuleName, item.ModulePath,
+                    item.Kind.HasValue ? item.Kind.Value.ToString() : null,
+                    item.Member, item.BlockNumber, item.BlockName,
+                    item.NetworkNumber, item.Expression, item.Reason));
+
+            AnalysisBehaviourSummary behaviourSummary =
+                BuildBehaviourSummary(behaviourConditions);
 
             var summary = new AnalysisReportSummary(
                 modules.Count,
@@ -95,11 +146,22 @@ namespace TiaFds.Reporting
                 errors);
 
             return new AnalysisReport(
+                new AnalysisProjectInfo(
+                    snapshot.Project == null ? null : snapshot.Project.Name,
+                    snapshot.Project == null || snapshot.Project.SelectedPlc == null
+                        ? null
+                        : snapshot.Project.SelectedPlc.Name),
+                BuildInventorySummary(snapshot),
                 summary, families, variantSummary.ToArray(), modules.ToArray(),
-                diagnosticSummary.ToArray(), diagnostics.ToArray(), manualReview.ToArray());
+                diagnosticSummary.ToArray(), diagnostics.ToArray(), manualReview.ToArray(),
+                behaviourSummary, behaviourConditions.ToArray(),
+                behaviourReview.ToArray(),
+                new AnalysisDiagnosticCounts(baselineWarnings, baselineErrors));
         }
 
-        private static AnalysisModule CopyModule(ControlModuleImplementation source)
+        private static AnalysisModule CopyModule(
+            ControlModuleImplementation source,
+            IReadOnlyList<AnalysisBehaviouralCondition> behaviourConditions)
         {
             var sites = new List<AnalysisCallSite>();
             foreach (ControlModuleCallSite site in source.CallSites)
@@ -107,14 +169,97 @@ namespace TiaFds.Reporting
                     site.ProcessingFunctionName, site.ProcessingFunctionNumber,
                     site.ProcessingVariant, site.CallingBlockName, site.CallingBlockNumber,
                     site.CallingBlockType, site.NetworkNumber, site.NetworkTitle,
-                    site.CallOrdinal, site.InOutFormalParameterName, site.InOutActualExpression));
+                    site.CallOrdinal, site.InOutFormalParameterName, site.InOutActualExpression,
+                    source.Declaration.MemberPath));
             sites.Sort(CompareCallSites);
             ControlModuleInfo declaration = source.Declaration;
+            var moduleBehaviour = new List<AnalysisBehaviouralCondition>();
+            foreach (AnalysisBehaviouralCondition condition in behaviourConditions)
+                if (string.Equals(condition.ModuleMemberPath, declaration.MemberPath,
+                    StringComparison.OrdinalIgnoreCase))
+                    moduleBehaviour.Add(condition);
             return new AnalysisModule(
                 declaration.Name, declaration.ModuleFamily, declaration.Description,
                 declaration.ContainerDbName, declaration.ContainerDbNumber,
                 declaration.MemberPath, declaration.DataTypeName,
-                declaration.Status.ToString(), MapStatus(source.Status), sites.ToArray());
+                declaration.Status.ToString(), MapStatus(source.Status), sites.ToArray(),
+                moduleBehaviour.ToArray());
+        }
+
+        private static AnalysisBehaviouralCondition CopyBehaviourCondition(
+            BehaviouralCondition source,
+            IReadOnlyList<BehaviouralDiagnostic> diagnostics)
+        {
+            var count = 0;
+            foreach (BehaviouralDiagnostic diagnostic in diagnostics)
+                if (string.Equals(diagnostic.ModulePath, source.ModuleMemberPath,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(diagnostic.Member, source.Member,
+                        StringComparison.OrdinalIgnoreCase))
+                    count++;
+            return new AnalysisBehaviouralCondition(
+                source.ModuleFamily, source.ModuleName, source.ModuleMemberPath,
+                (AnalysisBehaviouralConditionKind)Enum.Parse(
+                    typeof(AnalysisBehaviouralConditionKind), source.Kind.ToString(), false),
+                source.Member, source.Index, source.DestinationExpression,
+                source.ResolvedDestinationPath, CopyExpression(source.Expression),
+                source.SourceExpression, source.SourceOperands, source.ResolvedOperandPaths,
+                source.Description, source.BlockNumber, source.BlockName, source.BlockType,
+                source.BlockLanguage, source.NetworkNumber, source.NetworkTitle,
+                source.NetworkComment, source.StatementOrder,
+                (AnalysisBehaviouralResolutionStatus)Enum.Parse(
+                    typeof(AnalysisBehaviouralResolutionStatus),
+                    source.ResolutionStatus.ToString(), false),
+                count);
+        }
+
+        private static AnalysisBehaviourExpression CopyExpression(
+            BehaviourExpression source)
+        {
+            if (source == null) return null;
+            var children = new List<AnalysisBehaviourExpression>();
+            foreach (BehaviourExpression child in source.Children)
+                children.Add(CopyExpression(child));
+            return new AnalysisBehaviourExpression(
+                (AnalysisBehaviourExpressionKind)Enum.Parse(
+                    typeof(AnalysisBehaviourExpressionKind), source.Kind.ToString(), false),
+                source.DisplayText, source.Operand, source.ResolvedPath,
+                source.ConstantValue, children.ToArray());
+        }
+
+        private static AnalysisBehaviourSummary BuildBehaviourSummary(
+            IReadOnlyList<AnalysisBehaviouralCondition> conditions)
+        {
+            return new AnalysisBehaviourSummary(
+                conditions.Count,
+                Count(conditions, AnalysisBehaviouralConditionKind.StartCommand),
+                Count(conditions, AnalysisBehaviouralConditionKind.ControlRequest),
+                Count(conditions, AnalysisBehaviouralConditionKind.Interlock),
+                Count(conditions, AnalysisBehaviouralResolutionStatus.Complete),
+                Count(conditions, AnalysisBehaviouralResolutionStatus.Partial),
+                Count(conditions, AnalysisBehaviouralResolutionStatus.Unsupported),
+                Count(conditions, AnalysisBehaviouralResolutionStatus.Unresolved),
+                Count(conditions, AnalysisBehaviouralResolutionStatus.Ambiguous));
+        }
+
+        private static int Count(
+            IReadOnlyList<AnalysisBehaviouralCondition> conditions,
+            AnalysisBehaviouralConditionKind kind)
+        {
+            var count = 0;
+            foreach (AnalysisBehaviouralCondition condition in conditions)
+                if (condition.Kind == kind) count++;
+            return count;
+        }
+
+        private static int Count(
+            IReadOnlyList<AnalysisBehaviouralCondition> conditions,
+            AnalysisBehaviouralResolutionStatus status)
+        {
+            var count = 0;
+            foreach (AnalysisBehaviouralCondition condition in conditions)
+                if (condition.ResolutionStatus == status) count++;
+            return count;
         }
 
         private static IReadOnlyList<AnalysisFamilySummary> BuildFamilySummaries(
@@ -122,12 +267,12 @@ namespace TiaFds.Reporting
         {
             var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var orderedNames = new List<string>();
-            foreach (ControlModuleTypeDefinition definition in ControlModuleCatalogue.Definitions)
-                if (known.Add(definition.ModuleFamily)) orderedNames.Add(definition.ModuleFamily);
+            foreach (string family in AnalysisReportOrdering.KnownFamilies)
+                if (known.Add(family)) orderedNames.Add(family);
             var unexpected = new List<string>();
             foreach (AnalysisModule module in modules)
                 if (known.Add(module.ModuleFamily ?? string.Empty)) unexpected.Add(module.ModuleFamily);
-            unexpected.Sort(CompareText);
+            unexpected.Sort(AnalysisReportOrdering.CompareText);
             orderedNames.AddRange(unexpected);
 
             var result = new List<AnalysisFamilySummary>();
@@ -186,43 +331,80 @@ namespace TiaFds.Reporting
 
         private static int CompareModules(AnalysisModule left, AnalysisModule right)
         {
-            int result = CompareText(left.ModuleFamily, right.ModuleFamily);
+            int result = AnalysisReportOrdering.CompareFamily(
+                left.ModuleFamily, right.ModuleFamily);
             if (result != 0) return result;
-            result = CompareText(left.ModuleName, right.ModuleName);
-            return result != 0 ? result : CompareText(left.MemberPath, right.MemberPath);
+            result = AnalysisReportOrdering.CompareText(left.MemberPath, right.MemberPath);
+            return result != 0
+                ? result
+                : AnalysisReportOrdering.CompareText(left.ModuleName, right.ModuleName);
         }
 
         private static int CompareCallSites(AnalysisCallSite left, AnalysisCallSite right)
         {
-            int result = CompareNullable(left.CallingBlockNumber, right.CallingBlockNumber);
+            int result = AnalysisReportOrdering.CompareNullable(
+                left.CallingBlockNumber, right.CallingBlockNumber);
             if (result != 0) return result;
-            result = CompareText(left.CallingBlockName, right.CallingBlockName);
+            result = AnalysisReportOrdering.CompareNullable(
+                left.NetworkNumber, right.NetworkNumber);
             if (result != 0) return result;
-            result = CompareNullable(left.NetworkNumber, right.NetworkNumber);
+            result = AnalysisReportOrdering.CompareText(
+                left.ProcessingFunctionName, right.ProcessingFunctionName);
+            if (result != 0) return result;
+            result = AnalysisReportOrdering.CompareText(
+                left.InOutFormalParameterName, right.InOutFormalParameterName);
             return result != 0 ? result : left.CallOrdinal.CompareTo(right.CallOrdinal);
         }
 
         private static int CompareDiagnostics(AnalysisDiagnostic left, AnalysisDiagnostic right)
         {
-            int result = CompareText(left.Code, right.Code);
+            int result = AnalysisReportOrdering.CompareSeverity(left.Severity, right.Severity);
             if (result != 0) return result;
-            result = CompareText(left.Severity, right.Severity);
+            result = AnalysisReportOrdering.CompareText(left.Code, right.Code);
             if (result != 0) return result;
-            result = CompareText(left.Source, right.Source);
-            return result != 0 ? result : CompareText(left.Message, right.Message);
+            result = AnalysisReportOrdering.CompareText(left.Source, right.Source);
+            return result != 0
+                ? result
+                : AnalysisReportOrdering.CompareText(left.Message, right.Message);
         }
 
-        private static int CompareNullable(int? left, int? right)
+        private static int CompareManualReview(ManualReviewItem left, ManualReviewItem right)
         {
-            if (left.HasValue && right.HasValue) return left.Value.CompareTo(right.Value);
-            if (left.HasValue) return -1;
-            return right.HasValue ? 1 : 0;
+            int result = left.Status.CompareTo(right.Status);
+            if (result != 0) return result;
+            result = AnalysisReportOrdering.CompareFamily(
+                left.ModuleFamily, right.ModuleFamily);
+            if (result != 0) return result;
+            result = AnalysisReportOrdering.CompareText(left.MemberPath, right.MemberPath);
+            return result != 0
+                ? result
+                : AnalysisReportOrdering.CompareText(left.ModuleName, right.ModuleName);
         }
 
-        internal static int CompareText(string left, string right)
+        private static AnalysisPlcInventorySummary BuildInventorySummary(
+            EngineeringSnapshot snapshot)
         {
-            int result = StringComparer.OrdinalIgnoreCase.Compare(left ?? string.Empty, right ?? string.Empty);
-            return result != 0 ? result : StringComparer.Ordinal.Compare(left ?? string.Empty, right ?? string.Empty);
+            PlcInventory inventory = snapshot.Project == null ? null : snapshot.Project.Inventory;
+            if (inventory == null) return AnalysisPlcInventorySummary.Empty;
+            return new AnalysisPlcInventorySummary(
+                inventory.ProgramBlocks.Count,
+                CategoryCount(inventory, "Function"),
+                CategoryCount(inventory, "FunctionBlock"),
+                CategoryCount(inventory, "GlobalDataBlock"),
+                CategoryCount(inventory, "InstanceDataBlock"),
+                CategoryCount(inventory, "OrganizationBlock"),
+                inventory.TagTables.Count,
+                inventory.DataTypes.Count,
+                inventory.Diagnostics.Count,
+                inventory.DataBlockStructures.Count);
+        }
+
+        private static int CategoryCount(PlcInventory inventory, string blockType)
+        {
+            foreach (ProgramBlockCategoryCount category in inventory.ProgramBlockCategories)
+                if (string.Equals(category.BlockType, blockType, StringComparison.OrdinalIgnoreCase))
+                    return category.Count;
+            return 0;
         }
 
         private sealed class DiagnosticAccumulator

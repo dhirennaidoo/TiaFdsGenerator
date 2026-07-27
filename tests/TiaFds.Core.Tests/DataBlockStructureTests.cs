@@ -56,7 +56,7 @@ namespace TiaFds.Core.Tests
 
             EngineeringSnapshot actual = RoundTrip(Snapshot(true, structure));
 
-            Assert.AreEqual("1.2", actual.SchemaVersion);
+            Assert.AreEqual("1.3", actual.SchemaVersion);
             Assert.AreEqual(1, actual.Project.Inventory.DataBlockStructures.Count);
             DataBlockStructureInfo block = actual.Project.Inventory.DataBlockStructures[0];
             Assert.AreEqual(2, block.Members.Count);

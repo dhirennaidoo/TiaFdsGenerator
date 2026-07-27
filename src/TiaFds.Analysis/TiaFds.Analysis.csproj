@@ -20,6 +20,8 @@
     <Compile Include="ControlModuleConsoleRenderer.cs" />
     <Compile Include="ControlModuleContainerAnalyzer.cs" />
     <Compile Include="ControlModuleCallAnalyzer.cs" />
+    <Compile Include="ControlModuleBehaviourAnalyzer.cs" />
+    <Compile Include="ControlModuleBehaviourModels.cs" />
     <Compile Include="ControlModuleFunctionCatalogue.cs" />
     <Compile Include="ControlModuleImplementationConsoleRenderer.cs" />
     <Compile Include="ControlModuleImplementationModels.cs" />

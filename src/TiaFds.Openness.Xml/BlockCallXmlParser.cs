@@ -12,13 +12,18 @@ namespace TiaFds.Openness.Xml
 {
     public sealed class BlockCallParseResult
     {
-        public BlockCallParseResult(IReadOnlyList<BlockCallInfo> calls, IReadOnlyList<InventoryDiagnostic> diagnostics)
+        public BlockCallParseResult(
+            IReadOnlyList<BlockCallInfo> calls,
+            IReadOnlyList<InventoryDiagnostic> diagnostics,
+            IReadOnlyList<ExtractedLogicAssignment> assignments = null)
         {
             Calls = calls ?? new BlockCallInfo[0];
             Diagnostics = diagnostics ?? new InventoryDiagnostic[0];
+            Assignments = assignments ?? new ExtractedLogicAssignment[0];
         }
         public IReadOnlyList<BlockCallInfo> Calls { get; }
         public IReadOnlyList<InventoryDiagnostic> Diagnostics { get; }
+        public IReadOnlyList<ExtractedLogicAssignment> Assignments { get; }
     }
 
     public sealed class BlockCallXmlParser
@@ -39,21 +44,28 @@ namespace TiaFds.Openness.Xml
             XDocument document = LoadSecurely(inputPath);
             var calls = new List<BlockCallInfo>();
             var diagnostics = new List<InventoryDiagnostic>();
+            var assignments = new List<ExtractedLogicAssignment>();
             string language = programmingLanguage ?? ValueOfNamedAttribute(document.Root, "ProgrammingLanguage");
             if (!IsSupportedLanguage(language))
             {
                 diagnostics.Add(Diagnostic("Warning", "CM110_UNSUPPORTED_BLOCK_LANGUAGE", callingBlockPath,
                     "Block-call parsing is not supported for language '" + (language ?? "Unknown") + "'."));
-                return new BlockCallParseResult(calls, diagnostics);
+                return new BlockCallParseResult(calls, diagnostics, assignments);
             }
 
             List<XElement> networks = FindNetworks(document);
             var seenCalls = new HashSet<XElement>();
             var normalizer = new PlcSymbolPathNormalizer();
             var ordinal = 0;
+            var statementOrder = 0;
             foreach (XElement network in networks)
             {
-                var graph = new NetworkGraph(network);
+                var graph = new NetworkGraph(network, knownMemberPaths);
+                foreach (ExtractedLogicAssignment assignment in graph.ExtractAssignments(
+                    callingBlockName, callingBlockNumber, callingBlockType, language,
+                    ReadNetworkNumber(network), ReadNetworkTitle(network),
+                    ReadNetworkComment(network), ref statementOrder))
+                    assignments.Add(assignment);
                 foreach (XElement callInfo in network.Descendants().Where(item => Local(item) == "CallInfo"))
                 {
                     if (!seenCalls.Add(callInfo)) continue;
@@ -114,7 +126,7 @@ namespace TiaFds.Openness.Xml
                         parameters, callDiagnostics));
                 }
             }
-            return new BlockCallParseResult(calls, diagnostics);
+            return new BlockCallParseResult(calls, diagnostics, assignments);
         }
 
         private sealed class NetworkGraph
@@ -122,9 +134,12 @@ namespace TiaFds.Openness.Xml
             private readonly Dictionary<string, XElement> nodes =
                 new Dictionary<string, XElement>(StringComparer.Ordinal);
             private readonly List<XElement> wires;
+            private readonly ISet<string> knownMemberPaths;
+            private readonly PlcSymbolPathNormalizer normalizer = new PlcSymbolPathNormalizer();
 
-            public NetworkGraph(XElement network)
+            public NetworkGraph(XElement network, ISet<string> knownMemberPaths)
             {
+                this.knownMemberPaths = knownMemberPaths;
                 foreach (XElement element in network.Descendants())
                 {
                     string uid = Attribute(element, "UId");
@@ -134,6 +149,290 @@ namespace TiaFds.Openness.Xml
                         nodes[uid] = element;
                 }
                 wires = network.Descendants().Where(item => Local(item) == "Wire").ToList();
+            }
+
+            public IReadOnlyList<ExtractedLogicAssignment> ExtractAssignments(
+                string blockName, int? blockNumber, string blockType, string language,
+                int? networkNumber, string networkTitle, string networkComment,
+                ref int statementOrder)
+            {
+                var result = new List<ExtractedLogicAssignment>();
+                foreach (XElement part in nodes.Values.Where(item =>
+                {
+                    string name = Attribute(item, "Name");
+                    return Local(item) == "Part" &&
+                           (string.Equals(name, "Coil", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(name, "Assign", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(name, "Assignment", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(name, "=", StringComparison.OrdinalIgnoreCase));
+                }).OrderBy(item => ParseUid(Attribute(item, "UId"))))
+                {
+                    statementOrder++;
+                    ExtractedBooleanExpression destination = ResolvePortOperand(
+                        Attribute(part, "UId"), "operand");
+                    if (destination == null)
+                        destination = ResolvePortOperand(Attribute(part, "UId"), "out");
+                    ExtractedBooleanExpression source = BuildFromPort(
+                        Attribute(part, "UId"), "in", new HashSet<string>(StringComparer.Ordinal), 0);
+                    if (source == null)
+                        source = Unknown("No supported source connection was found.");
+
+                    string destinationText = destination == null ? null : destination.DisplayText;
+                    string destinationPath = destination == null ? null : destination.ResolvedPath;
+                    ExtractedLogicResolutionStatus status = ExpressionStatus(source);
+                    if (string.IsNullOrWhiteSpace(destinationText))
+                        status = ExtractedLogicResolutionStatus.Unsupported;
+                    else if (string.IsNullOrWhiteSpace(destinationPath) &&
+                             status == ExtractedLogicResolutionStatus.Complete)
+                        status = ExtractedLogicResolutionStatus.Partial;
+
+                    result.Add(new ExtractedLogicAssignment(
+                        destinationText, destinationPath, source, source.DisplayText,
+                        blockName, blockNumber, blockType, language, networkNumber,
+                        networkTitle, networkComment, statementOrder, status));
+                }
+                return result.ToArray();
+            }
+
+            private ExtractedBooleanExpression BuildFromPort(
+                string partUid, string port, ISet<string> visiting, int depth)
+            {
+                if (depth > 32) return Unknown("Maximum expression depth exceeded.");
+                XElement wire = FindWire(partUid, port);
+                if (wire == null) return null;
+                var candidates = new List<ExtractedBooleanExpression>();
+                foreach (XElement connection in wire.Elements())
+                {
+                    if (Local(connection) == "Powerrail")
+                    {
+                        candidates.Add(Constant(true));
+                        continue;
+                    }
+                    string uid = Attribute(connection, "UId");
+                    if (string.IsNullOrWhiteSpace(uid) ||
+                        string.Equals(uid, partUid, StringComparison.Ordinal))
+                        continue;
+                    XElement node;
+                    if (!nodes.TryGetValue(uid, out node)) continue;
+                    if (Local(connection) == "IdentCon" &&
+                        (Local(node) == "Access" || Local(node) == "Constant"))
+                    {
+                        candidates.Add(ExpressionForOperand(node));
+                        continue;
+                    }
+                    if (Local(connection) == "NameCon" &&
+                        IsOutputPort(Attribute(connection, "Name")) &&
+                        Local(node) == "Part")
+                        candidates.Add(BuildPart(node, visiting, depth + 1));
+                }
+                return candidates.Count == 1
+                    ? candidates[0]
+                    : candidates.Count == 0
+                        ? null
+                        : Unknown("Multiple source nodes share one logical input.");
+            }
+
+            private ExtractedBooleanExpression BuildPart(
+                XElement part, ISet<string> visiting, int depth)
+            {
+                string uid = Attribute(part, "UId");
+                if (!visiting.Add(uid)) return Unknown("Circular expression graph.");
+                try
+                {
+                    string name = Attribute(part, "Name") ?? string.Empty;
+                    if (string.Equals(name, "Contact", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ExtractedBooleanExpression input =
+                            BuildFromPort(uid, "in", visiting, depth);
+                        ExtractedBooleanExpression operand = ResolvePortOperand(uid, "operand") ??
+                            Unknown("Contact operand was not resolved.");
+                        if (part.Descendants().Any(item =>
+                            Local(item) == "Negated" &&
+                            string.Equals(Attribute(item, "Name"), "operand",
+                                StringComparison.OrdinalIgnoreCase)))
+                            operand = Unary(ExtractedBooleanExpressionKind.Not, operand);
+                        return IsTrue(input)
+                            ? operand
+                            : Binary(ExtractedBooleanExpressionKind.And,
+                                input ?? Unknown("Contact input was not resolved."), operand);
+                    }
+                    if (string.Equals(name, "O", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(name, "A", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var children = new List<ExtractedBooleanExpression>();
+                        foreach (string inputName in InputPorts(uid))
+                        {
+                            ExtractedBooleanExpression child =
+                                BuildFromPort(uid, inputName, visiting, depth);
+                            if (child != null) children.Add(child);
+                        }
+                        return Nary(
+                            string.Equals(name, "O", StringComparison.OrdinalIgnoreCase)
+                                ? ExtractedBooleanExpressionKind.Or
+                                : ExtractedBooleanExpressionKind.And,
+                            children);
+                    }
+                    if (string.Equals(name, "NOT", StringComparison.OrdinalIgnoreCase))
+                        return Unary(ExtractedBooleanExpressionKind.Not,
+                            BuildFromPort(uid, "in", visiting, depth) ??
+                            Unknown("NOT input was not resolved."));
+                    return Unknown("Part '" + name + "' is not supported.");
+                }
+                finally { visiting.Remove(uid); }
+            }
+
+            private ExtractedBooleanExpression ResolvePortOperand(string partUid, string port)
+            {
+                XElement wire = FindWire(partUid, port);
+                if (wire == null) return null;
+                var operands = new List<XElement>();
+                foreach (XElement connection in wire.Elements())
+                {
+                    if (Local(connection) != "IdentCon") continue;
+                    XElement node;
+                    if (nodes.TryGetValue(Attribute(connection, "UId"), out node) &&
+                        (Local(node) == "Access" || Local(node) == "Constant"))
+                        operands.Add(node);
+                }
+                return operands.Count == 1
+                    ? ExpressionForOperand(operands[0])
+                    : operands.Count == 0 ? null : Unknown("Multiple operands were connected.");
+            }
+
+            private ExtractedBooleanExpression ExpressionForOperand(XElement operand)
+            {
+                string text;
+                bool supported;
+                if (!TryRenderOperand(operand, out text, out supported) ||
+                    string.IsNullOrWhiteSpace(text))
+                    return Unknown("Operand could not be rendered.");
+                bool constant;
+                if (bool.TryParse(text, out constant)) return Constant(constant);
+                SymbolPathNormalizationResult normalized = normalizer.Normalize(text);
+                string resolved = null;
+                if (normalized.IsSymbolicMemberPath &&
+                    (knownMemberPaths == null ||
+                     knownMemberPaths.Contains(normalized.NormalizedPath)))
+                    resolved = normalized.NormalizedPath;
+                return new ExtractedBooleanExpression(
+                    ExtractedBooleanExpressionKind.Operand, text, resolved, null,
+                    new ExtractedBooleanExpression[0]);
+            }
+
+            private XElement FindWire(string uid, string port)
+            {
+                return wires.FirstOrDefault(wire => wire.Elements().Any(connection =>
+                    Local(connection) == "NameCon" &&
+                    string.Equals(Attribute(connection, "UId"), uid, StringComparison.Ordinal) &&
+                    string.Equals(Attribute(connection, "Name"), port,
+                        StringComparison.OrdinalIgnoreCase)));
+            }
+
+            private IEnumerable<string> InputPorts(string uid)
+            {
+                return wires.SelectMany(wire => wire.Elements())
+                    .Where(connection => Local(connection) == "NameCon" &&
+                        string.Equals(Attribute(connection, "UId"), uid, StringComparison.Ordinal) &&
+                        (string.Equals(Attribute(connection, "Name"), "in",
+                            StringComparison.OrdinalIgnoreCase) ||
+                         (Attribute(connection, "Name") ?? string.Empty).StartsWith(
+                            "in", StringComparison.OrdinalIgnoreCase)))
+                    .Select(connection => Attribute(connection, "Name"))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(value => value, StringComparer.OrdinalIgnoreCase);
+            }
+
+            private static bool IsOutputPort(string port)
+            {
+                return string.Equals(port, "out", StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(port, "Q", StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(port, "eno", StringComparison.OrdinalIgnoreCase);
+            }
+
+            private static int ParseUid(string value)
+            {
+                int result;
+                return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture,
+                    out result) ? result : int.MaxValue;
+            }
+
+            private static bool IsTrue(ExtractedBooleanExpression expression)
+            {
+                return expression != null &&
+                       expression.Kind == ExtractedBooleanExpressionKind.Constant &&
+                       expression.ConstantValue == true;
+            }
+
+            private static ExtractedBooleanExpression Constant(bool value)
+            {
+                return new ExtractedBooleanExpression(
+                    ExtractedBooleanExpressionKind.Constant,
+                    value ? "TRUE" : "FALSE", null, value,
+                    new ExtractedBooleanExpression[0]);
+            }
+
+            private static ExtractedBooleanExpression Unknown(string text)
+            {
+                return new ExtractedBooleanExpression(
+                    ExtractedBooleanExpressionKind.Unknown, text, null, null,
+                    new ExtractedBooleanExpression[0]);
+            }
+
+            private static ExtractedBooleanExpression Unary(
+                ExtractedBooleanExpressionKind kind,
+                ExtractedBooleanExpression child)
+            {
+                return new ExtractedBooleanExpression(kind,
+                    "NOT (" + child.DisplayText + ")", null, null,
+                    new[] { child });
+            }
+
+            private static ExtractedBooleanExpression Binary(
+                ExtractedBooleanExpressionKind kind,
+                ExtractedBooleanExpression left,
+                ExtractedBooleanExpression right)
+            {
+                return Nary(kind, new[] { left, right });
+            }
+
+            private static ExtractedBooleanExpression Nary(
+                ExtractedBooleanExpressionKind kind,
+                IEnumerable<ExtractedBooleanExpression> children)
+            {
+                var values = children == null
+                    ? new List<ExtractedBooleanExpression>()
+                    : children.Where(item => item != null).ToList();
+                if (values.Count == 0) return Unknown("Logical operator has no inputs.");
+                if (values.Count == 1) return values[0];
+                string separator = kind == ExtractedBooleanExpressionKind.Or ? " OR " : " AND ";
+                return new ExtractedBooleanExpression(kind,
+                    "(" + string.Join(separator,
+                        values.Select(item => item.DisplayText)) + ")",
+                    null, null, values.ToArray());
+            }
+
+            private static ExtractedLogicResolutionStatus ExpressionStatus(
+                ExtractedBooleanExpression expression)
+            {
+                if (expression == null ||
+                    expression.Kind == ExtractedBooleanExpressionKind.Unknown)
+                    return ExtractedLogicResolutionStatus.Unsupported;
+                bool partial = expression.Kind == ExtractedBooleanExpressionKind.Operand &&
+                               string.IsNullOrWhiteSpace(expression.ResolvedPath) &&
+                               !string.Equals(expression.DisplayText, "TRUE",
+                                   StringComparison.OrdinalIgnoreCase) &&
+                               !string.Equals(expression.DisplayText, "FALSE",
+                                   StringComparison.OrdinalIgnoreCase);
+                foreach (ExtractedBooleanExpression child in expression.Children)
+                {
+                    ExtractedLogicResolutionStatus childStatus = ExpressionStatus(child);
+                    if (childStatus == ExtractedLogicResolutionStatus.Unsupported)
+                        return childStatus;
+                    if (childStatus == ExtractedLogicResolutionStatus.Partial) partial = true;
+                }
+                return partial
+                    ? ExtractedLogicResolutionStatus.Partial
+                    : ExtractedLogicResolutionStatus.Complete;
             }
 
             public OperandResolution ResolveOperand(
@@ -290,8 +589,19 @@ namespace TiaFds.Openness.Xml
             List<XElement> result = document.Descendants()
                 .Where(element => Local(element) == "SW.Blocks.CompileUnit" ||
                                   Local(element) == "CompileUnit" || Local(element) == "Network")
-                .Where(element => element.Descendants().Any(item => Local(item) == "CallInfo")).ToList();
-            if (result.Count == 0 && document.Descendants().Any(item => Local(item) == "CallInfo"))
+                .Where(element => element.Descendants().Any(item =>
+                    Local(item) == "CallInfo" ||
+                    (Local(item) == "Part" &&
+                     (string.Equals(Attribute(item, "Name"), "Coil",
+                          StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(Attribute(item, "Name"), "Assign",
+                          StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(Attribute(item, "Name"), "Assignment",
+                          StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(Attribute(item, "Name"), "=",
+                          StringComparison.OrdinalIgnoreCase))))).ToList();
+            if (result.Count == 0 && document.Descendants().Any(item =>
+                Local(item) == "CallInfo" || Local(item) == "Part"))
                 result.Add(document.Root);
             return result;
         }
@@ -325,6 +635,16 @@ namespace TiaFds.Openness.Xml
                 (Local(item) == "Title" || item.Ancestors().Any(parent =>
                     string.Equals(Attribute(parent, "CompositionName"), "Title", StringComparison.OrdinalIgnoreCase))));
             return title == null ? null : title.Value;
+        }
+
+        private static string ReadNetworkComment(XElement network)
+        {
+            XElement comment = network.Descendants().FirstOrDefault(item =>
+                (Local(item) == "Text" || Local(item) == "Comment") &&
+                (Local(item) == "Comment" || item.Ancestors().Any(parent =>
+                    string.Equals(Attribute(parent, "CompositionName"), "Comment",
+                        StringComparison.OrdinalIgnoreCase))));
+            return comment == null ? null : comment.Value;
         }
 
         private static int? ReadCalledNumber(XElement call)

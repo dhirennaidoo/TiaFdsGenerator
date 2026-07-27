@@ -17,7 +17,9 @@ namespace TiaFds.Core
             IReadOnlyList<DataBlockStructureInfo> dataBlockStructures,
             bool dataBlockStructuresIncluded,
             IReadOnlyList<BlockCallInfo> blockCalls,
-            bool blockCallsIncluded)
+            bool blockCallsIncluded,
+            IReadOnlyList<ExtractedLogicAssignment> logicAssignments,
+            bool logicAssignmentsIncluded)
         {
             PlcName = plcName;
             ProgramBlocks = Copy(programBlocks);
@@ -28,6 +30,8 @@ namespace TiaFds.Core
             DataBlockStructuresIncluded = dataBlockStructuresIncluded;
             BlockCalls = CopyAndSortBlockCalls(blockCalls);
             BlockCallsIncluded = blockCallsIncluded;
+            LogicAssignments = CopyAndSortLogicAssignments(logicAssignments);
+            LogicAssignmentsIncluded = logicAssignmentsIncluded;
             ProgramBlockCategories = CountBlockCategories(ProgramBlocks);
         }
 
@@ -37,7 +41,8 @@ namespace TiaFds.Core
             IReadOnlyList<PlcTagTableInfo> tagTables,
             IReadOnlyList<PlcDataTypeInfo> dataTypes,
             IReadOnlyList<InventoryDiagnostic> diagnostics)
-            : this(plcName, programBlocks, tagTables, dataTypes, diagnostics, null, false, null, false)
+            : this(plcName, programBlocks, tagTables, dataTypes, diagnostics,
+                null, false, null, false, null, false)
         {
         }
 
@@ -50,7 +55,23 @@ namespace TiaFds.Core
             IReadOnlyList<DataBlockStructureInfo> dataBlockStructures,
             bool dataBlockStructuresIncluded)
             : this(plcName, programBlocks, tagTables, dataTypes, diagnostics,
-                dataBlockStructures, dataBlockStructuresIncluded, null, false)
+                dataBlockStructures, dataBlockStructuresIncluded, null, false, null, false)
+        {
+        }
+
+        public PlcInventory(
+            string plcName,
+            IReadOnlyList<ProgramBlockInfo> programBlocks,
+            IReadOnlyList<PlcTagTableInfo> tagTables,
+            IReadOnlyList<PlcDataTypeInfo> dataTypes,
+            IReadOnlyList<InventoryDiagnostic> diagnostics,
+            IReadOnlyList<DataBlockStructureInfo> dataBlockStructures,
+            bool dataBlockStructuresIncluded,
+            IReadOnlyList<BlockCallInfo> blockCalls,
+            bool blockCallsIncluded)
+            : this(plcName, programBlocks, tagTables, dataTypes, diagnostics,
+                dataBlockStructures, dataBlockStructuresIncluded, blockCalls,
+                blockCallsIncluded, null, false)
         {
         }
 
@@ -80,6 +101,12 @@ namespace TiaFds.Core
 
         [JsonProperty("blockCallsIncluded")]
         public bool BlockCallsIncluded { get; }
+
+        [JsonProperty("logicAssignments")]
+        public IReadOnlyList<ExtractedLogicAssignment> LogicAssignments { get; }
+
+        [JsonProperty("logicAssignmentsIncluded")]
+        public bool LogicAssignmentsIncluded { get; }
 
         public IReadOnlyList<ProgramBlockCategoryCount> ProgramBlockCategories { get; }
 
@@ -165,6 +192,28 @@ namespace TiaFds.Core
                 if (result != 0) return result;
                 result = left.CallOrdinal.CompareTo(right.CallOrdinal);
                 return result != 0 ? result : StringComparer.Ordinal.Compare(left.CalledBlockName ?? string.Empty, right.CalledBlockName ?? string.Empty);
+            });
+            return copy.ToArray();
+        }
+
+        private static IReadOnlyList<ExtractedLogicAssignment> CopyAndSortLogicAssignments(
+            IReadOnlyList<ExtractedLogicAssignment> source)
+        {
+            if (source == null || source.Count == 0) return new ExtractedLogicAssignment[0];
+            var copy = new List<ExtractedLogicAssignment>(source);
+            copy.Sort((left, right) =>
+            {
+                int result = CompareNullable(left.BlockNumber, right.BlockNumber);
+                if (result != 0) return result;
+                result = StringComparer.Ordinal.Compare(
+                    left.BlockName ?? string.Empty, right.BlockName ?? string.Empty);
+                if (result != 0) return result;
+                result = CompareNullable(left.NetworkNumber, right.NetworkNumber);
+                if (result != 0) return result;
+                result = left.StatementOrder.CompareTo(right.StatementOrder);
+                return result != 0 ? result : StringComparer.Ordinal.Compare(
+                    left.DestinationExpression ?? string.Empty,
+                    right.DestinationExpression ?? string.Empty);
             });
             return copy.ToArray();
         }

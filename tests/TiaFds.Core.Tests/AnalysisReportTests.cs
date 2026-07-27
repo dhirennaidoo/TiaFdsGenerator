@@ -47,13 +47,14 @@ namespace TiaFds.Core.Tests
             Assert.AreEqual(1, report.Summary.FamilyMismatchModules);
             CollectionAssert.AreEqual(new[]
             {
-                "Drive", "Valve", "Speed", "DigitalInput",
-                "AnalogueInput", "AnalogueOutput", "DigitalOutput",
+                "AnalogueInput", "AnalogueOutput", "DigitalInput", "DigitalOutput",
+                "Drive", "Speed", "Valve",
                 "UnexpectedA", "UnexpectedZ"
             }, report.Families.Select(item => item.ModuleFamily).ToArray());
-            Assert.AreEqual(2, report.Families[0].Total);
-            Assert.AreEqual(1, report.Families[0].Correlated);
-            Assert.AreEqual(1, report.Families[0].Unreferenced);
+            AnalysisFamilySummary drive = report.Families.Single(item => item.ModuleFamily == "Drive");
+            Assert.AreEqual(2, drive.Total);
+            Assert.AreEqual(1, drive.Correlated);
+            Assert.AreEqual(1, drive.Unreferenced);
             Assert.AreEqual(6, report.ManualReview.Count);
             Assert.IsFalse(report.ManualReview.Any(item => item.ModuleName == "A" &&
                 item.ModuleFamily == "Drive"));
@@ -61,8 +62,8 @@ namespace TiaFds.Core.Tests
                 report.ManualReview.Single(item => item.ModuleName == "B").Reason);
             CollectionAssert.AreEqual(new[]
             {
-                "DigitalInput/E", "Drive/A", "Drive/B", "Speed/D",
-                "UnexpectedA/A", "UnexpectedZ/Z", "Valve/C"
+                "DigitalInput/E", "Drive/A", "Drive/B", "Speed/D", "Valve/C",
+                "UnexpectedA/A", "UnexpectedZ/Z"
             }, report.Modules.Select(item => item.ModuleFamily + "/" + item.ModuleName).ToArray());
         }
 

@@ -13,12 +13,15 @@ namespace TiaFds.Core
         private readonly List<InventoryDiagnostic> diagnostics = new List<InventoryDiagnostic>();
         private readonly List<DataBlockStructureInfo> dataBlockStructures = new List<DataBlockStructureInfo>();
         private readonly List<BlockCallInfo> blockCalls = new List<BlockCallInfo>();
+        private readonly List<ExtractedLogicAssignment> logicAssignments =
+            new List<ExtractedLogicAssignment>();
         private readonly HashSet<string> blockKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> tagTableKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> dataTypeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> dataBlockStructureKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private bool dataBlockStructuresIncluded;
         private bool blockCallsIncluded;
+        private bool logicAssignmentsIncluded;
 
         public PlcInventoryBuilder(string plcName)
         {
@@ -138,6 +141,17 @@ namespace TiaFds.Core
             blockCalls.Add(call);
         }
 
+        public void MarkLogicAssignmentsIncluded()
+        {
+            logicAssignmentsIncluded = true;
+        }
+
+        public void AddLogicAssignment(ExtractedLogicAssignment assignment)
+        {
+            if (assignment == null) throw new ArgumentNullException(nameof(assignment));
+            logicAssignments.Add(assignment);
+        }
+
         public PlcInventory Build()
         {
             blocks.Sort(CompareBlocks);
@@ -155,7 +169,9 @@ namespace TiaFds.Core
                 dataBlockStructures,
                 dataBlockStructuresIncluded,
                 blockCalls,
-                blockCallsIncluded);
+                blockCallsIncluded,
+                logicAssignments,
+                logicAssignmentsIncluded);
         }
 
         private static void AddMemberPaths(DataBlockMemberInfo member, ISet<string> paths)

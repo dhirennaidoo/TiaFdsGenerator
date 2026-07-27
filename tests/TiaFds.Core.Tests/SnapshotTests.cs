@@ -38,7 +38,7 @@ namespace TiaFds.Core.Tests
                 string path = files.PathOf("snapshot.json");
                 new EngineeringSnapshotJsonWriter().Write(CreateSnapshot("Project", "PLC", false), path, false);
                 string json = File.ReadAllText(path);
-                StringAssert.Contains(json, "\n  \"schemaVersion\": \"1.2\"");
+            StringAssert.Contains(json, "\n  \"schemaVersion\": \"1.3\"");
                 StringAssert.Contains(json, "\"generatorVersion\": \"0.6.1\"");
                 StringAssert.Contains(json, "\"exportedAtUtc\": \"2026-07-23T20:00:00+00:00\"");
                 Assert.IsFalse(json.Contains("SourceFileName"));
@@ -247,14 +247,21 @@ namespace TiaFds.Core.Tests
             {
                 "--import-json", "x.json", "--analyze-module-calls",
                 "--module-family", "Drive", "--implementation-status", "Correlated",
-                "--module", "BP_M16006"
+                "--module", "BP_M16006", "--report-json", "report.json",
+                "--report-excel", "report.xlsx"
             });
             Assert.IsTrue(options.AnalyzeModuleCalls);
             Assert.AreEqual("Correlated", options.ImplementationStatus);
             Assert.AreEqual("BP_M16006", options.ModuleName);
+            Assert.AreEqual("report.json", options.ReportJson);
+            Assert.AreEqual("report.xlsx", options.ReportExcel);
             Assert.ThrowsException<ArgumentException>(() => SnapshotCliOptions.Parse(new[]
             {
                 "--import-json", "x.json", "--implementation-status", "Correlated"
+            }));
+            Assert.ThrowsException<ArgumentException>(() => SnapshotCliOptions.Parse(new[]
+            {
+                "--import-json", "x.json", "--report-json", "report.json"
             }));
         }
 

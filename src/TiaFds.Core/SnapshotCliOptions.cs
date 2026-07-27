@@ -12,7 +12,9 @@ namespace TiaFds.Core
             string moduleFamily,
             bool analyzeModuleCalls,
             string implementationStatus,
-            string moduleName)
+            string moduleName,
+            string reportJson,
+            string reportExcel)
         {
             ImportJson = importJson;
             Inventory = inventory;
@@ -22,6 +24,8 @@ namespace TiaFds.Core
             AnalyzeModuleCalls = analyzeModuleCalls;
             ImplementationStatus = implementationStatus;
             ModuleName = moduleName;
+            ReportJson = reportJson;
+            ReportExcel = reportExcel;
         }
 
         public string ImportJson { get; }
@@ -32,6 +36,8 @@ namespace TiaFds.Core
         public bool AnalyzeModuleCalls { get; }
         public string ImplementationStatus { get; }
         public string ModuleName { get; }
+        public string ReportJson { get; }
+        public string ReportExcel { get; }
 
         public static SnapshotCliOptions Parse(string[] args)
         {
@@ -48,6 +54,8 @@ namespace TiaFds.Core
             bool analyzeModuleCalls = false;
             string implementationStatus = null;
             string moduleName = null;
+            string reportJson = null;
+            string reportExcel = null;
 
             for (var index = 0; index < args.Length; index++)
             {
@@ -83,7 +91,8 @@ namespace TiaFds.Core
                 }
 
                 if (option != "--import-json" && option != "--module-family" &&
-                    option != "--implementation-status" && option != "--module")
+                    option != "--implementation-status" && option != "--module" &&
+                    option != "--report-json" && option != "--report-excel")
                 {
                     if (option == "--input" || option == "--retrieve-to" || option == "--plc" ||
                         option == "--export-json" || option == "--overwrite" || option == "--include-source-path" ||
@@ -103,6 +112,10 @@ namespace TiaFds.Core
                     throw Invalid("--implementation-status may only be specified once.");
                 if (option == "--module" && moduleName != null)
                     throw Invalid("--module may only be specified once.");
+                if (option == "--report-json" && reportJson != null)
+                    throw Invalid("--report-json may only be specified once.");
+                if (option == "--report-excel" && reportExcel != null)
+                    throw Invalid("--report-excel may only be specified once.");
                 if (++index >= args.Length || string.IsNullOrWhiteSpace(args[index]))
                 {
                     throw Invalid("Missing value for " + option + ".");
@@ -111,7 +124,9 @@ namespace TiaFds.Core
                 if (option == "--import-json") importJson = args[index];
                 else if (option == "--module-family") moduleFamily = args[index];
                 else if (option == "--implementation-status") implementationStatus = args[index];
-                else moduleName = args[index];
+                else if (option == "--module") moduleName = args[index];
+                else if (option == "--report-json") reportJson = args[index];
+                else reportExcel = args[index];
             }
 
             if (string.IsNullOrWhiteSpace(importJson))
@@ -125,16 +140,19 @@ namespace TiaFds.Core
             }
             if ((implementationStatus != null || moduleName != null) && !analyzeModuleCalls)
                 throw Invalid("--implementation-status and --module require --analyze-module-calls.");
+            if ((reportJson != null || reportExcel != null) && !analyzeModuleCalls)
+                throw Invalid("--report-json and --report-excel require --analyze-module-calls.");
 
             return new SnapshotCliOptions(importJson, inventory, verbose, discoverModules, moduleFamily,
-                analyzeModuleCalls, implementationStatus, moduleName);
+                analyzeModuleCalls, implementationStatus, moduleName, reportJson, reportExcel);
         }
 
         public static string Usage()
         {
             return "Usage: TiaFds.Cli.exe --import-json <path> [--inventory] [--verbose] " +
                    "[--discover-modules [--module-family <name>]]" +
-                   " [--analyze-module-calls [--module-family <name>] [--implementation-status <status>] [--module <name>]]";
+                   " [--analyze-module-calls [--module-family <name>] [--implementation-status <status>]" +
+                   " [--module <name>] [--report-json <path>] [--report-excel <path>]]";
         }
 
         private static ArgumentException Invalid(string message)
