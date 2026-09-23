@@ -7,7 +7,6 @@ namespace TiaFds.Core
     [JsonObject(MemberSerialization.OptIn)]
     public sealed class DataBlockMemberInfo
     {
-        [JsonConstructor]
         public DataBlockMemberInfo(
             string name,
             string memberPath,
@@ -17,6 +16,21 @@ namespace TiaFds.Core
             bool isArray,
             string arrayBounds,
             IReadOnlyList<DataBlockMemberInfo> children)
+            : this(name, memberPath, dataTypeName, comment, nestingLevel, isArray, arrayBounds, null, children)
+        {
+        }
+
+        [JsonConstructor]
+        public DataBlockMemberInfo(
+            string name,
+            string memberPath,
+            string dataTypeName,
+            string comment,
+            int nestingLevel,
+            bool isArray,
+            string arrayBounds,
+            string address,
+            IReadOnlyList<DataBlockMemberInfo> children)
         {
             Name = name ?? string.Empty;
             MemberPath = memberPath ?? string.Empty;
@@ -25,6 +39,7 @@ namespace TiaFds.Core
             NestingLevel = nestingLevel;
             IsArray = isArray;
             ArrayBounds = arrayBounds;
+            Address = string.IsNullOrWhiteSpace(address) ? null : address;
             Children = CopyAndSort(children);
         }
 
@@ -48,6 +63,11 @@ namespace TiaFds.Core
 
         [JsonProperty("arrayBounds", NullValueHandling = NullValueHandling.Ignore)]
         public string ArrayBounds { get; }
+
+        // Byte.bit offset within the data block (e.g. "400.0"). Only STEP 7 Classic
+        // extraction supplies it; TIA exports leave it null.
+        [JsonProperty("address", NullValueHandling = NullValueHandling.Ignore)]
+        public string Address { get; }
 
         [JsonProperty("children")]
         public IReadOnlyList<DataBlockMemberInfo> Children { get; }

@@ -85,6 +85,8 @@ namespace TiaFds.Core
                 case "InstanceDataBlock": return "Instance data blocks";
                 case "ArrayDataBlock": return "Array data blocks";
                 case "DataBlock": return "Data blocks";
+                case "SystemFunction": return "System functions";
+                case "SystemFunctionBlock": return "System function blocks";
                 default: return "Other blocks";
             }
         }

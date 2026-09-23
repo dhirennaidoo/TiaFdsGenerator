@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <Platforms>AnyCPU</Platforms>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <RootNamespace>TiaFds.Step7.Extract.Cli</RootNamespace>
+    <AssemblyName>TiaFds.Step7.Extract.Cli</AssemblyName>
+    <Version>0.6.1</Version>
+    <Deterministic>true</Deterministic>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TiaFds.Core\TiaFds.Core.csproj" />
+    <ProjectReference Include="..\TiaFds.Step7Classic\TiaFds.Step7Classic.csproj" />
+  </ItemGroup>
+</Project>

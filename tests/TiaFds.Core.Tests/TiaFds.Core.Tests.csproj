@@ -16,6 +16,7 @@
     <ProjectReference Include="..\..\src\TiaFds.Analysis\TiaFds.Analysis.csproj" />
     <ProjectReference Include="..\..\src\TiaFds.Reporting\TiaFds.Reporting.csproj" />
     <ProjectReference Include="..\..\src\TiaFds.Openness.Xml\TiaFds.Openness.Xml.csproj" />
+    <ProjectReference Include="..\..\src\TiaFds.Step7Classic\TiaFds.Step7Classic.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\TestData\sanitized-fc501-first-call.xml">

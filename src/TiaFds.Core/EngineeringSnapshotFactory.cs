@@ -13,6 +13,19 @@ namespace TiaFds.Core
             bool includeSourcePath,
             DateTimeOffset exportedAtUtc)
         {
+            return Create(project, selectedPlc, inventory, sourceInput, includeSourcePath, exportedAtUtc,
+                SnapshotSourceKind.TiaPortal);
+        }
+
+        public EngineeringSnapshot Create(
+            TiaProjectSummary project,
+            PlcInfo selectedPlc,
+            PlcInventory inventory,
+            string sourceInput,
+            bool includeSourcePath,
+            DateTimeOffset exportedAtUtc,
+            string sourceKind)
+        {
             if (project == null)
             {
                 throw new ArgumentNullException(nameof(project));
@@ -38,6 +51,7 @@ namespace TiaFds.Core
                 project.Name,
                 Path.GetFileName(fullSourcePath),
                 includeSourcePath ? fullSourcePath : null,
+                sourceKind,
                 selectedPlc,
                 inventory);
 

@@ -37,6 +37,13 @@ TiaFds.Extract.Cli (x64, .NET Framework 4.8)
     -> TiaFds.Core
     -> EngineeringSnapshot JSON
 
+Any Windows machine (STEP 7 Classic V5.x, no Siemens software)
+
+TiaFds.Step7.Extract.Cli (Any CPU, .NET Framework 4.8)
+    -> TiaFds.Step7Classic (reads .s7p project files directly)
+    -> TiaFds.Core
+    -> EngineeringSnapshot JSON (sourceKind = Step7Classic)
+
 Development/reporting machine
 
 EngineeringSnapshot JSON
@@ -47,7 +54,7 @@ EngineeringSnapshot JSON
     -> immutable AnalysisReport
 ```
 
-Only `TiaFds.Openness` references `Siemens.Engineering`. `TiaFds.Openness.Xml` securely parses exported XML without Siemens dependencies. `TiaFds.Cli` references Core, Analysis, and Reporting and runs without TIA Portal, Siemens registry entries, `Siemens.Engineering`, or `TiaFds.Openness`.
+Only `TiaFds.Openness` references `Siemens.Engineering`, and only `TiaFds.Step7Classic` references `DotNetSiemensPLCToolBoxLibrary`. `TiaFds.Openness.Xml` securely parses exported XML without Siemens dependencies. `TiaFds.Cli` references Core, Analysis, and Reporting and runs without TIA Portal, Siemens registry entries, `Siemens.Engineering`, or `TiaFds.Openness`.
 
 ## Reporting model
 
@@ -89,14 +96,25 @@ msbuild .\TiaFdsGenerator.sln /t:Build /p:Configuration=Release /p:Platform=x64
 dotnet test .\tests\TiaFds.Core.Tests\TiaFds.Core.Tests.csproj --configuration Debug -p:Platform=AnyCPU
 ```
 
-All automated tests use synthetic snapshots and XML. They require no TIA installation or customer project.
+Build with MSBuild before running `dotnet test`. `TiaFds.Reporting` is a legacy-format project whose NuGet references do not resolve under a `dotnet`-driven build; after the MSBuild step, `dotnet test ... --no-build` is reliable.
 
-## Snapshot schema 1.3
+All automated tests use synthetic snapshots, XML, and in-memory STEP 7 models. They require no TIA installation, STEP 7 installation, or customer project. The `LocalSample` test category runs against a real STEP 7 V5.x project only when `TIAFDS_STEP7_SAMPLE_PROJECT` points at its `.s7p` file, and is otherwise inconclusive:
 
-Application version and schema version are independent. Schema `1.3` extends
-the existing `1.2` block-call contract with neutral PLC logic assignments and
-boolean expression trees. Readers remain compatible with schemas `1.0` through
-`1.2`.
+```powershell
+$env:TIAFDS_STEP7_SAMPLE_PROJECT = "D:\Samples\A-Mill\A-Mill.s7p"
+dotnet test .\tests\TiaFds.Core.Tests\TiaFds.Core.Tests.csproj --no-build -p:Platform=AnyCPU --filter TestCategory=LocalSample
+```
+
+## Snapshot schema 1.4
+
+Application version and schema version are independent. Schema `1.4` adds
+`project.sourceKind` (`TiaPortal` or `Step7Classic`) and an optional
+byte.bit `address` on data-block members (STEP 7 Classic only). Snapshots
+without `sourceKind` are TIA Portal exports. Readers remain compatible with
+schemas `1.0` through `1.3`.
+
+Schema `1.3` extends the `1.2` block-call contract with neutral PLC logic
+assignments and boolean expression trees.
 
 Schema 1.2 retained the 1.1 DB-declaration contract and added:
 
@@ -167,6 +185,52 @@ PLC state.
 
 The supported boundary and the real FC501 pattern are documented in
 [`docs/behavioural-analysis.md`](docs/behavioural-analysis.md).
+
+## STEP 7 Classic (V5.x) extraction
+
+STEP 7 V5.x has no Openness API. `TiaFds.Step7.Extract.Cli` reads the project
+files (`.s7p`, or a zipped project) directly through
+[DotNetSiemensPLCToolBoxLibrary](https://github.com/dotnetprojects/DotNetSiemensPLCToolBoxLibrary)
+(LGPL-2.1, referenced unmodified; see `THIRD-PARTY-NOTICES.md`). It needs no
+Siemens software and opens the project read-only. The project's `Sources`
+folder is ignored: compiled blocks are the source of truth.
+
+```bat
+TiaFds.Step7.Extract.Cli.exe ^
+  --input "D:\Projects\A-Mill\A-Mill.s7p" ^
+  --plc "S7 Program" ^
+  --include-db-structures ^
+  --export-json "C:\Exports\A-Mill.json" ^
+  --overwrite
+
+TiaFds.Cli.exe --import-json "C:\Exports\A-Mill.json" --discover-modules
+```
+
+`--plc` accepts the S7 program name, its CPU name, or
+`Station/CPU/Program`; a name matching several programs is rejected with
+the candidates listed (exit code `4`). Exit codes otherwise match
+`TiaFds.Extract.Cli`.
+
+Mapping onto the shared snapshot:
+
+- blocks keep their symbolic names (absolute names such as `DB1006` when unnamed); German language mnemonics map to TIA names (`AWL`→`STL`, `KOP`→`LAD`, `FUP`→`FBD`)
+- the symbol table becomes one tag table named `Symbols`; UDTs become PLC data types
+- only global DB structures are kept; instance DBs are classified from the decoded block header, because the project's block list does not flag them reliably
+- UDT-typed members are named by their UDT symbol (`Udt.cm.Drv`) and expanded, and every member carries its byte.bit `address` for later pointer resolution
+- variable tables are not inventoried
+
+Classic diagnostics use the `S7C` prefix:
+
+- `S7C001_BLOCK_LIST_READ_FAILED`
+- `S7C002_DB_STRUCTURE_DECODE_FAILED` (also surfaces as `CM007` during discovery)
+- `S7C003_BLOCK_KNOW_HOW_PROTECTED`
+- `S7C004_UDT_SYMBOL_NOT_FOUND`
+- `S7C005_SYMBOL_TABLE_NOT_FOUND`
+
+Phase 1 covers inventory and DB structures, so `--discover-modules` works on
+Classic snapshots. `--include-block-calls` is rejected until block-call and
+STL logic extraction are implemented; `--analyze-module-calls` therefore
+reports `CM100_BLOCK_CALLS_NOT_EXTRACTED` for Classic snapshots.
 
 ## TIA extraction
 

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <Platforms>AnyCPU</Platforms>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <RootNamespace>TiaFds.Step7Classic</RootNamespace>
+    <AssemblyName>TiaFds.Step7Classic</AssemblyName>
+    <Version>0.6.1</Version>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- LGPL-2.1. Referenced unmodified; only Step7LibraryProjectLoader may use its types. -->
+    <PackageReference Include="DotNetProjects.DotNetSiemensPLCToolBoxLibrary" Version="4.4.10" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TiaFds.Core\TiaFds.Core.csproj" />
+  </ItemGroup>
+</Project>

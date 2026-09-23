@@ -38,7 +38,7 @@ namespace TiaFds.Core.Tests
                 string path = files.PathOf("snapshot.json");
                 new EngineeringSnapshotJsonWriter().Write(CreateSnapshot("Project", "PLC", false), path, false);
                 string json = File.ReadAllText(path);
-            StringAssert.Contains(json, "\n  \"schemaVersion\": \"1.3\"");
+            StringAssert.Contains(json, "\n  \"schemaVersion\": \"1.4\"");
                 StringAssert.Contains(json, "\"generatorVersion\": \"0.6.1\"");
                 StringAssert.Contains(json, "\"exportedAtUtc\": \"2026-07-23T20:00:00+00:00\"");
                 Assert.IsFalse(json.Contains("SourceFileName"));

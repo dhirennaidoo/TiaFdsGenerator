@@ -19,6 +19,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiaFds.Extract.Cli", "src\T
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiaFds.Core.Tests", "tests\TiaFds.Core.Tests\TiaFds.Core.Tests.csproj", "{D37C9325-A104-42D5-9BB1-8F5CA3C00213}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiaFds.Step7Classic", "src\TiaFds.Step7Classic\TiaFds.Step7Classic.csproj", "{2729F90F-28C0-4B77-B7A9-5983DD6E3C20}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiaFds.Step7.Extract.Cli", "src\TiaFds.Step7.Extract.Cli\TiaFds.Step7.Extract.Cli.csproj", "{34F1FC85-2B01-49DD-AABF-1F69F24CFE31}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -57,6 +61,14 @@ Global
 		{649A45AE-C622-4925-8878-EC99F472A40B}.Debug|x64.Build.0 = Debug|x64
 		{649A45AE-C622-4925-8878-EC99F472A40B}.Release|x64.ActiveCfg = Release|x64
 		{649A45AE-C622-4925-8878-EC99F472A40B}.Release|x64.Build.0 = Release|x64
+		{2729F90F-28C0-4B77-B7A9-5983DD6E3C20}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2729F90F-28C0-4B77-B7A9-5983DD6E3C20}.Debug|x64.Build.0 = Debug|Any CPU
+		{2729F90F-28C0-4B77-B7A9-5983DD6E3C20}.Release|x64.ActiveCfg = Release|Any CPU
+		{2729F90F-28C0-4B77-B7A9-5983DD6E3C20}.Release|x64.Build.0 = Release|Any CPU
+		{34F1FC85-2B01-49DD-AABF-1F69F24CFE31}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{34F1FC85-2B01-49DD-AABF-1F69F24CFE31}.Debug|x64.Build.0 = Debug|Any CPU
+		{34F1FC85-2B01-49DD-AABF-1F69F24CFE31}.Release|x64.ActiveCfg = Release|Any CPU
+		{34F1FC85-2B01-49DD-AABF-1F69F24CFE31}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
