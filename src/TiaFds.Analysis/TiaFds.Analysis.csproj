@@ -16,6 +16,9 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' "><PlatformTarget>AnyCPU</PlatformTarget><DebugType>pdbonly</DebugType><Optimize>true</Optimize><OutputPath>bin\Release\</OutputPath><DefineConstants>TRACE</DefineConstants><WarningLevel>4</WarningLevel></PropertyGroup>
   <ItemGroup><Reference Include="System" /></ItemGroup>
   <ItemGroup>
+    <Compile Include="BehaviourConditionSemantics.cs" />
+    <Compile Include="BehaviourExpressionSimplifier.cs" />
+    <Compile Include="BooleanConstantCatalogue.cs" />
     <Compile Include="ControlModuleCatalogue.cs" />
     <Compile Include="ControlModuleConsoleRenderer.cs" />
     <Compile Include="ControlModuleContainerAnalyzer.cs" />

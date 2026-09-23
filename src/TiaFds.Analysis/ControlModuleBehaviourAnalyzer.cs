@@ -12,6 +12,24 @@ namespace TiaFds.Analysis
         private static readonly Regex MemberPattern = new Regex(
             "^(SA|CR|ILK)(?:\\[(\\d+)\\]|(\\d+))?$",
             RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+        private readonly BooleanConstantCatalogue constantCatalogue;
+        private readonly IBehaviourConditionSemantics semantics;
+
+        public ControlModuleBehaviourAnalyzer()
+            : this(BooleanConstantCatalogue.Default,
+                DefaultBehaviourConditionSemantics.Instance)
+        {
+        }
+
+        public ControlModuleBehaviourAnalyzer(
+            BooleanConstantCatalogue constantCatalogue,
+            IBehaviourConditionSemantics semantics)
+        {
+            this.constantCatalogue = constantCatalogue ??
+                BooleanConstantCatalogue.Default;
+            this.semantics = semantics ??
+                DefaultBehaviourConditionSemantics.Instance;
+        }
 
         public ControlModuleBehaviourResult Analyze(
             EngineeringSnapshot snapshot,
@@ -35,6 +53,9 @@ namespace TiaFds.Analysis
             {
                 ControlModuleInfo module = FindOwner(discovery.Modules,
                     assignment.ResolvedDestinationPath);
+                if (module == null && !IsWithinKnownContainer(
+                        discovery.Modules, assignment.ResolvedDestinationPath))
+                    continue;
                 string member = module == null
                     ? TerminalMember(assignment.ResolvedDestinationPath ??
                         assignment.DestinationExpression)
@@ -73,6 +94,25 @@ namespace TiaFds.Analysis
                     assignment.SourceExpression, assignment, assignmentsByScope,
                     new HashSet<string>(StringComparer.OrdinalIgnoreCase), 0,
                     out status);
+                BehaviouralConditionResolutionStatus tracedStatus = status;
+                var simplification =
+                    new BehaviourExpressionSimplifier(constantCatalogue)
+                        .Simplify(expression);
+                expression = simplification.OriginalExpression;
+
+                if (simplification.EffectiveValue.HasValue)
+                    status = BehaviouralConditionResolutionStatus.Complete;
+                else if (tracedStatus ==
+                         BehaviouralConditionResolutionStatus.Ambiguous)
+                    status = tracedStatus;
+                else if (simplification.HasCatalogueConflict ||
+                         simplification.HasAmbiguousNumericLiteral ||
+                         simplification.HasUnresolvedOperand)
+                    status = BehaviouralConditionResolutionStatus.Partial;
+                else if (simplification.HasUnsupportedNode)
+                    status = BehaviouralConditionResolutionStatus.Unsupported;
+                else
+                    status = BehaviouralConditionResolutionStatus.Complete;
 
                 int duplicateCount;
                 if (!string.IsNullOrWhiteSpace(assignment.ResolvedDestinationPath) &&
@@ -123,6 +163,30 @@ namespace TiaFds.Analysis
                     problemMessage = "The behavioural expression retains one or more unresolved operands.";
                 }
 
+                if (simplification.HasCatalogueConflict)
+                {
+                    problemCode = "BEH119_CONSTANT_CATALOGUE_CONFLICT";
+                    problemMessage = "Conflicting boolean constant mappings match an expression operand.";
+                }
+                else if (simplification.HasAmbiguousNumericLiteral)
+                {
+                    problemCode = "BEH118_BOOLEAN_LITERAL_DATATYPE_AMBIGUOUS";
+                    problemMessage = "Numeric 0/1 was not treated as boolean without datatype evidence.";
+                }
+
+                BehaviourExpressionSimplificationStatus simplificationStatus =
+                    SimplificationStatus(simplification);
+                BehaviourConditionEffect effect = Effect(simplification);
+                IReadOnlyList<string> variants = ProcessingVariants(
+                    implementation, module);
+                BehaviourSemanticInterpretation interpretation =
+                    semantics.Interpret(
+                        module == null ? null : module.ModuleFamily,
+                        variants, item.Kind, item.Member, effect,
+                        simplification.EffectiveValue);
+                IReadOnlyList<BehaviourConstantFinding> findings = BuildFindings(
+                    item, simplification, effect, interpretation);
+
                 var operands = new List<string>();
                 var paths = new List<string>();
                 CollectOperands(expression, operands, paths);
@@ -139,15 +203,180 @@ namespace TiaFds.Analysis
                     assignment.BlockNumber, assignment.BlockName,
                     assignment.BlockType, assignment.BlockLanguage,
                     assignment.NetworkNumber, assignment.NetworkTitle,
-                    assignment.NetworkComment, assignment.StatementOrder, status));
+                    assignment.NetworkComment, assignment.StatementOrder, status,
+                    simplification.SimplifiedExpression,
+                    simplification.EffectiveValue, simplificationStatus, effect,
+                    interpretation.Classification,
+                    interpretation.RuleIdentifier, findings));
 
                 if (problemCode != null)
                     AddProblem(problemCode, problemMessage, assignment, module,
                         item.Member, item.Kind, diagnostics, reviews);
+
+                if (simplification.EffectiveValue.HasValue)
+                    AddDiagnostic(
+                        simplification.EffectiveValue.Value
+                            ? "BEH111_EXPRESSION_PERMANENTLY_TRUE"
+                            : "BEH112_EXPRESSION_PERMANENTLY_FALSE",
+                        "The behavioural expression simplifies to " +
+                        (simplification.EffectiveValue.Value ? "TRUE." : "FALSE."),
+                        assignment, module, item.Member, diagnostics);
+
+                if (interpretation.RequiresReview &&
+                    simplification.EffectiveValue.HasValue)
+                    AddProblem("BEH115_CONSTANT_SEMANTICS_UNKNOWN",
+                        "The expression is constant, but the condition polarity or engineering semantics are not confirmed.",
+                        assignment, module, item.Member, item.Kind,
+                        diagnostics, reviews);
             }
 
             return new ControlModuleBehaviourResult(
                 conditions, diagnostics, reviews, true);
+        }
+
+        private static BehaviourExpressionSimplificationStatus SimplificationStatus(
+            BehaviourExpressionSimplificationResult result)
+        {
+            if (result.EffectiveValue == true)
+                return BehaviourExpressionSimplificationStatus.ConstantTrue;
+            if (result.EffectiveValue == false)
+                return BehaviourExpressionSimplificationStatus.ConstantFalse;
+            if (result.HasUnsupportedNode)
+                return BehaviourExpressionSimplificationStatus.Unsupported;
+            if (result.HasUnresolvedOperand ||
+                result.HasCatalogueConflict ||
+                result.HasAmbiguousNumericLiteral)
+                return BehaviourExpressionSimplificationStatus.Partial;
+            return result.Changed
+                ? BehaviourExpressionSimplificationStatus.Simplified
+                : BehaviourExpressionSimplificationStatus.NotSimplified;
+        }
+
+        private static BehaviourConditionEffect Effect(
+            BehaviourExpressionSimplificationResult result)
+        {
+            if (result.EffectiveValue == true)
+                return BehaviourConditionEffect.PermanentlyTrue;
+            if (result.EffectiveValue == false)
+                return BehaviourConditionEffect.PermanentlyFalse;
+            if ((result.HasUnresolvedOperand || result.HasUnsupportedNode ||
+                 result.HasCatalogueConflict ||
+                 result.HasAmbiguousNumericLiteral) && result.Changed)
+                return BehaviourConditionEffect.PartiallySimplified;
+            if (result.HasUnresolvedOperand || result.HasUnsupportedNode ||
+                result.HasCatalogueConflict ||
+                result.HasAmbiguousNumericLiteral)
+                return BehaviourConditionEffect.Unknown;
+            return BehaviourConditionEffect.Dynamic;
+        }
+
+        private static IReadOnlyList<string> ProcessingVariants(
+            ControlModuleImplementationResult implementation,
+            ControlModuleInfo module)
+        {
+            if (module == null) return new string[0];
+            var values = new List<string>();
+            foreach (ControlModuleImplementation item in implementation.Modules)
+                if (string.Equals(item.MemberPath, module.MemberPath,
+                        StringComparison.OrdinalIgnoreCase))
+                    foreach (ControlModuleCallSite site in item.CallSites)
+                        if (!string.IsNullOrWhiteSpace(site.ProcessingVariant) &&
+                            !values.Contains(site.ProcessingVariant))
+                            values.Add(site.ProcessingVariant);
+            values.Sort(StringComparer.OrdinalIgnoreCase);
+            return values.ToArray();
+        }
+
+        private static IReadOnlyList<BehaviourConstantFinding> BuildFindings(
+            AssignmentContext item,
+            BehaviourExpressionSimplificationResult simplification,
+            BehaviourConditionEffect effect,
+            BehaviourSemanticInterpretation interpretation)
+        {
+            var result = new List<BehaviourConstantFinding>();
+            foreach (ResolvedBooleanConstant constant in simplification.Constants)
+                if (constant.Source ==
+                        BooleanConstantSource.KnownProjectSymbol ||
+                    constant.Source ==
+                        BooleanConstantSource.TemporaryTrace)
+                    result.Add(Finding(item,
+                        BehaviourConstantFindingKind.KnownConstantResolved,
+                        "Information", simplification, interpretation,
+                        constant.Value,
+                        "Resolved exact boolean constant symbol '" +
+                        constant.OriginalSourceText + "' using " +
+                        constant.Evidence + "."));
+
+            if (simplification.Changed &&
+                !simplification.EffectiveValue.HasValue)
+                result.Add(Finding(item,
+                    BehaviourConstantFindingKind.ConstantBranchRemoved,
+                    "Information", simplification, interpretation, null,
+                    "The supported expression was simplified without changing its dynamic meaning."));
+
+            if (simplification.EffectiveValue.HasValue)
+                result.Add(Finding(item,
+                    simplification.EffectiveValue.Value
+                        ? BehaviourConstantFindingKind.ConditionPermanentlyTrue
+                        : BehaviourConstantFindingKind.ConditionPermanentlyFalse,
+                    "Warning", simplification, interpretation,
+                    simplification.EffectiveValue,
+                    "The behavioural condition simplifies to a permanent boolean value."));
+
+            if (interpretation.Classification ==
+                BehaviourReviewClassification.PermanentlyDisabled)
+                result.Add(Finding(item,
+                    BehaviourConstantFindingKind.ConditionDisabled,
+                    "Warning", simplification, interpretation,
+                    simplification.EffectiveValue,
+                    "The active-high command/request channel is permanently disabled."));
+            else if (interpretation.Classification ==
+                     BehaviourReviewClassification.BridgedOrBypassed)
+                result.Add(Finding(item,
+                    BehaviourConstantFindingKind.ConditionBridged,
+                    "Warning", simplification, interpretation,
+                    simplification.EffectiveValue,
+                    "The confirmed semantic rule identifies a bridged or bypassed condition."));
+            else if (interpretation.Classification ==
+                     BehaviourReviewClassification.PermanentlyAsserted)
+                result.Add(Finding(item,
+                    BehaviourConstantFindingKind.ConditionPermanentlyAsserted,
+                    "Warning", simplification, interpretation,
+                    simplification.EffectiveValue,
+                    "The confirmed semantic rule identifies a permanently asserted condition."));
+            else if (interpretation.RequiresReview &&
+                     simplification.EffectiveValue.HasValue)
+                result.Add(Finding(item,
+                    BehaviourConstantFindingKind.ConstantSemanticsUnknown,
+                    "Warning", simplification, interpretation,
+                    simplification.EffectiveValue,
+                    "The raw constant value is known, but its engineering meaning requires confirmation."));
+            return result.ToArray();
+        }
+
+        private static BehaviourConstantFinding Finding(
+            AssignmentContext item, BehaviourConstantFindingKind kind,
+            string severity,
+            BehaviourExpressionSimplificationResult simplification,
+            BehaviourSemanticInterpretation interpretation,
+            bool? value, string message)
+        {
+            ExtractedLogicAssignment assignment = item.Assignment;
+            ControlModuleInfo module = item.Module;
+            return new BehaviourConstantFinding(
+                kind, severity,
+                module == null ? null : module.ModuleFamily,
+                module == null ? null : module.Name,
+                module == null ? assignment.ResolvedDestinationPath : module.MemberPath,
+                item.Kind, item.Member,
+                assignment.OriginalSourceText,
+                simplification.SimplifiedExpression == null
+                    ? null
+                    : simplification.SimplifiedExpression.DisplayText,
+                value, interpretation.Classification,
+                interpretation.RuleIdentifier,
+                assignment.BlockNumber, assignment.BlockName,
+                assignment.NetworkNumber, assignment.NetworkTitle, message);
         }
 
         private static Dictionary<string, List<ExtractedLogicAssignment>> IndexAssignments(
@@ -169,7 +398,7 @@ namespace TiaFds.Analysis
             return result;
         }
 
-        private static BehaviourExpression TraceExpression(
+        private BehaviourExpression TraceExpression(
             ExtractedBooleanExpression source,
             ExtractedLogicAssignment owner,
             IDictionary<string, List<ExtractedLogicAssignment>> assignments,
@@ -208,8 +437,10 @@ namespace TiaFds.Analysis
                 }
                 try
                 {
-                    return TraceExpression(prior[0].SourceExpression, prior[0],
+                    BehaviourExpression traced = TraceExpression(
+                        prior[0].SourceExpression, prior[0],
                         assignments, visiting, depth + 1, out status);
+                    return MarkTemporaryTrace(traced, source.DisplayText);
                 }
                 finally { visiting.Remove(key); }
             }
@@ -229,6 +460,38 @@ namespace TiaFds.Analysis
                 status = Worse(status, childStatus);
             }
             return Copy(source, children.ToArray());
+        }
+
+        private BehaviourExpression MarkTemporaryTrace(
+            BehaviourExpression expression, string temporaryName)
+        {
+            if (expression == null) return null;
+            ResolvedBooleanConstant resolved = expression.ResolvedConstant;
+            if (resolved == null)
+            {
+                bool conflict;
+                constantCatalogue.TryResolve(
+                    expression.DisplayText, expression.ResolvedPath,
+                    out resolved, out conflict);
+                if (resolved == null && expression.Kind ==
+                    BehaviourExpressionKind.Constant &&
+                    expression.ConstantValue.HasValue)
+                    resolved = new ResolvedBooleanConstant(
+                        expression.ConstantValue.Value,
+                        expression.DisplayText, expression.ResolvedPath,
+                        BooleanConstantSource.Literal,
+                        "TIA_BOOLEAN_LITERAL");
+            }
+            if (resolved != null)
+                resolved = new ResolvedBooleanConstant(
+                    resolved.Value, temporaryName, resolved.ResolvedPath,
+                    BooleanConstantSource.TemporaryTrace,
+                    "TEMPORARY_TRACE:" + temporaryName + "->" +
+                    resolved.Evidence);
+            return new BehaviourExpression(
+                expression.Kind, expression.DisplayText, expression.Operand,
+                expression.ResolvedPath, expression.ConstantValue,
+                expression.Children, resolved);
         }
 
         private static BehaviouralConditionResolutionStatus Worse(
@@ -315,6 +578,18 @@ namespace TiaFds.Analysis
             return best;
         }
 
+        private static bool IsWithinKnownContainer(
+            IReadOnlyList<ControlModuleInfo> modules, string destination)
+        {
+            if (string.IsNullOrWhiteSpace(destination)) return false;
+            foreach (ControlModuleInfo module in modules)
+                if (!string.IsNullOrWhiteSpace(module.ContainerDbName) &&
+                    destination.StartsWith(module.ContainerDbName + ".",
+                        StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
         private static string RelativeMember(string owner, string destination)
         {
             if (string.IsNullOrWhiteSpace(owner) ||
@@ -390,6 +665,21 @@ namespace TiaFds.Analysis
                 module == null ? assignment.ResolvedDestinationPath : module.MemberPath,
                 kind, member, assignment.BlockNumber, assignment.BlockName,
                 assignment.NetworkNumber, assignment.OriginalSourceText, message));
+        }
+
+        private static void AddDiagnostic(
+            string code, string message, ExtractedLogicAssignment assignment,
+            ControlModuleInfo module, string member,
+            IList<BehaviouralDiagnostic> diagnostics)
+        {
+            diagnostics.Add(new BehaviouralDiagnostic(
+                "Warning", code, message,
+                module == null
+                    ? assignment.ResolvedDestinationPath
+                    : module.MemberPath,
+                member, assignment.BlockNumber, assignment.BlockName,
+                assignment.NetworkNumber, assignment.NetworkTitle,
+                assignment.OriginalSourceText));
         }
 
         private sealed class AssignmentContext

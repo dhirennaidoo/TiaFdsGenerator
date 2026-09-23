@@ -103,6 +103,25 @@ namespace TiaFds.Reporting
                 report.BehaviourSummary.AmbiguousCount);
 
             row++;
+            Section(sheet, row++, "Constant and Bypass Analysis");
+            LabelValue(sheet, row++, "Dynamic conditions",
+                report.BehaviourSummary.DynamicConditionCount);
+            LabelValue(sheet, row++, "Permanently TRUE",
+                report.BehaviourSummary.PermanentlyTrueCount);
+            LabelValue(sheet, row++, "Permanently FALSE",
+                report.BehaviourSummary.PermanentlyFalseCount);
+            LabelValue(sheet, row++, "Permanently enabled",
+                report.BehaviourSummary.PermanentlyEnabledCount);
+            LabelValue(sheet, row++, "Permanently disabled",
+                report.BehaviourSummary.PermanentlyDisabledCount);
+            LabelValue(sheet, row++, "Bridged or bypassed",
+                report.BehaviourSummary.BridgedOrBypassedCount);
+            LabelValue(sheet, row++, "Permanently asserted",
+                report.BehaviourSummary.PermanentlyAssertedCount);
+            LabelValue(sheet, row++, "Semantic review required",
+                report.BehaviourSummary.SemanticReviewRequiredCount);
+
+            row++;
             Section(sheet, row++, "Family summary");
             int familyHeader = row++;
             string[] familyHeaders =
@@ -168,7 +187,9 @@ namespace TiaFds.Reporting
                 "Container Number", "Datatype", "Member Path",
                 "Processing Call Count", "Processing Variants", "Caller Blocks",
                 "Start Command Count", "Control Request Count", "Interlock Count",
-                "Incomplete Behaviour Count"
+                "Incomplete Behaviour Count", "Permanently TRUE",
+                "Permanently FALSE", "Bridged/Bypassed",
+                "Permanently Disabled", "Behaviour Review Required"
             };
             Header(sheet, 1, headers);
             var row = 2;
@@ -192,6 +213,11 @@ namespace TiaFds.Reporting
                 Number(sheet.Cell(row, 14), Count(module,
                     AnalysisBehaviouralConditionKind.Interlock));
                 Number(sheet.Cell(row, 15), CountIncomplete(module));
+                Number(sheet.Cell(row, 16), module.PermanentlyTrueCount);
+                Number(sheet.Cell(row, 17), module.PermanentlyFalseCount);
+                Number(sheet.Cell(row, 18), module.BridgedConditionCount);
+                Number(sheet.Cell(row, 19), module.DisabledConditionCount);
+                Number(sheet.Cell(row, 20), module.BehaviourReviewRequiredCount);
                 row++;
             }
             FinishTable(sheet, row - 1, headers.Length, "ModulesTable",
@@ -205,9 +231,13 @@ namespace TiaFds.Reporting
             {
                 "Module Family", "Module Name", "Module Description", "Module Member Path",
                 "Condition Type", "Condition Member", "Condition Index", "Resolution Status",
-                "Description", "Source Expression", "Normalized Expression", "Source Operands",
-                "Resolved Operand Paths", "Block Number", "Block Name", "Block Language",
-                "Network Number", "Network Title", "Network Comment", "Diagnostic Count"
+                "Description", "Original Expression", "Simplified Expression",
+                "Effective Constant Value", "Condition Effect", "Review Classification",
+                "Constant Source", "Constant Symbols", "Is Bridged/Bypassed",
+                "Is Permanently Disabled", "Requires Semantic Review", "Finding Count",
+                "Source Operands", "Resolved Operand Paths", "Block Number", "Block Name",
+                "Block Language", "Network Number", "Network Title", "Network Comment",
+                "Diagnostic Count"
             };
             Header(sheet, 1, headers);
             var row = 2;
@@ -225,20 +255,38 @@ namespace TiaFds.Reporting
                 Text(sheet.Cell(row, 9), condition.Description);
                 Text(sheet.Cell(row, 10), condition.SourceExpression);
                 Text(sheet.Cell(row, 11),
-                    condition.Expression == null ? null : condition.Expression.DisplayText);
-                Text(sheet.Cell(row, 12), string.Join("; ", condition.SourceOperands));
-                Text(sheet.Cell(row, 13), string.Join("; ", condition.ResolvedOperandPaths));
-                NullableNumber(sheet.Cell(row, 14), condition.BlockNumber);
-                Text(sheet.Cell(row, 15), condition.BlockName);
-                Text(sheet.Cell(row, 16), condition.BlockLanguage);
-                NullableNumber(sheet.Cell(row, 17), condition.NetworkNumber);
-                Text(sheet.Cell(row, 18), condition.NetworkTitle);
-                Text(sheet.Cell(row, 19), condition.NetworkComment);
-                Number(sheet.Cell(row, 20), condition.DiagnosticCount);
+                    condition.SimplifiedDisplayText);
+                Text(sheet.Cell(row, 12), BooleanText(
+                    condition.EffectiveConstantValue));
+                Text(sheet.Cell(row, 13), condition.Effect.ToString());
+                Text(sheet.Cell(row, 14), condition.ReviewClassification.ToString());
+                Text(sheet.Cell(row, 15), JoinConstantSources(
+                    condition.OriginalExpression));
+                Text(sheet.Cell(row, 16), JoinConstantSymbols(
+                    condition.OriginalExpression));
+                Text(sheet.Cell(row, 17), BooleanText(
+                    condition.ReviewClassification ==
+                    AnalysisBehaviourReviewClassification.BridgedOrBypassed));
+                Text(sheet.Cell(row, 18), BooleanText(
+                    condition.ReviewClassification ==
+                    AnalysisBehaviourReviewClassification.PermanentlyDisabled));
+                Text(sheet.Cell(row, 19), BooleanText(
+                    condition.ReviewClassification ==
+                    AnalysisBehaviourReviewClassification.RequiresManualInterpretation));
+                Number(sheet.Cell(row, 20), condition.ConstantFindings.Count);
+                Text(sheet.Cell(row, 21), string.Join("; ", condition.SourceOperands));
+                Text(sheet.Cell(row, 22), string.Join("; ", condition.ResolvedOperandPaths));
+                NullableNumber(sheet.Cell(row, 23), condition.BlockNumber);
+                Text(sheet.Cell(row, 24), condition.BlockName);
+                Text(sheet.Cell(row, 25), condition.BlockLanguage);
+                NullableNumber(sheet.Cell(row, 26), condition.NetworkNumber);
+                Text(sheet.Cell(row, 27), condition.NetworkTitle);
+                Text(sheet.Cell(row, 28), condition.NetworkComment);
+                Number(sheet.Cell(row, 29), condition.DiagnosticCount);
                 row++;
             }
             FinishTable(sheet, row - 1, headers.Length, "BehaviouralConditionsTable",
-                new[] { 3, 4, 9, 10, 11, 12, 13, 18, 19 });
+                new[] { 3, 4, 9, 10, 11, 16, 21, 22, 27, 28 });
         }
 
         private static void WriteProcessingCalls(IXLWorksheet sheet, AnalysisReport report)
@@ -364,6 +412,51 @@ namespace TiaFds.Reporting
             return call.ProcessingFunctionNumber.HasValue
                 ? "FC" + call.ProcessingFunctionNumber.Value + " " + call.ProcessingFunctionName
                 : call.ProcessingFunctionName;
+        }
+
+        private static string BooleanText(bool? value)
+        {
+            return value.HasValue ? (value.Value ? "TRUE" : "FALSE") : null;
+        }
+
+        private static string BooleanText(bool value)
+        {
+            return value ? "TRUE" : "FALSE";
+        }
+
+        private static string JoinConstantSources(
+            AnalysisBehaviourExpression expression)
+        {
+            var values = new List<string>();
+            CollectConstants(expression, values, null);
+            return string.Join("; ", values);
+        }
+
+        private static string JoinConstantSymbols(
+            AnalysisBehaviourExpression expression)
+        {
+            var values = new List<string>();
+            CollectConstants(expression, null, values);
+            return string.Join("; ", values);
+        }
+
+        private static void CollectConstants(
+            AnalysisBehaviourExpression expression,
+            IList<string> sources, IList<string> symbols)
+        {
+            if (expression == null) return;
+            if (expression.ResolvedConstant != null)
+            {
+                string source = expression.ResolvedConstant.Source.ToString();
+                string symbol = expression.ResolvedConstant.OriginalSourceText;
+                if (sources != null && !sources.Contains(source))
+                    sources.Add(source);
+                if (symbols != null && !string.IsNullOrWhiteSpace(symbol) &&
+                    !symbols.Contains(symbol))
+                    symbols.Add(symbol);
+            }
+            foreach (AnalysisBehaviourExpression child in expression.Children)
+                CollectConstants(child, sources, symbols);
         }
 
         private static string JoinDistinct(

@@ -30,7 +30,7 @@ namespace TiaFds.Core.Tests
 
                 Assert.AreEqual(first, second);
                 JObject json = JObject.Parse(second);
-                Assert.AreEqual("1.1", (string)json["schemaVersion"]);
+                Assert.AreEqual("1.2", (string)json["schemaVersion"]);
                 Assert.AreEqual("Example", (string)json["project"]["projectName"]);
                 Assert.AreEqual(3, (int)json["moduleSummary"]["totalCount"]);
                 Assert.AreEqual(2, json["processingVariants"].Count());

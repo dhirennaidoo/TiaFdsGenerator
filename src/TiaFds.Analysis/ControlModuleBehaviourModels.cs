@@ -29,12 +29,92 @@ namespace TiaFds.Analysis
         Unknown
     }
 
+    public enum BooleanConstantSource
+    {
+        Literal,
+        DeclaredConstant,
+        KnownProjectSymbol,
+        PropagatedExpression,
+        TemporaryTrace,
+        Unknown
+    }
+
+    public enum BehaviourExpressionSimplificationStatus
+    {
+        NotSimplified,
+        Simplified,
+        ConstantTrue,
+        ConstantFalse,
+        Partial,
+        Unsupported
+    }
+
+    public enum BehaviourConditionEffect
+    {
+        Dynamic,
+        PermanentlyTrue,
+        PermanentlyFalse,
+        PartiallySimplified,
+        Unknown
+    }
+
+    public enum BehaviourReviewClassification
+    {
+        NormalDynamicCondition,
+        PermanentlyEnabled,
+        PermanentlyDisabled,
+        BridgedOrBypassed,
+        PermanentlyAsserted,
+        RequiresManualInterpretation
+    }
+
+    public enum BehaviourConstantFindingKind
+    {
+        ConditionPermanentlyTrue,
+        ConditionPermanentlyFalse,
+        ConditionBridged,
+        ConditionDisabled,
+        ConditionPermanentlyAsserted,
+        ConstantBranchRemoved,
+        KnownConstantResolved,
+        ConstantSemanticsUnknown
+    }
+
+    public sealed class ResolvedBooleanConstant
+    {
+        public ResolvedBooleanConstant(
+            bool value, string originalSourceText, string resolvedPath,
+            BooleanConstantSource source, string evidence)
+        {
+            Value = value;
+            OriginalSourceText = originalSourceText;
+            ResolvedPath = resolvedPath;
+            Source = source;
+            Evidence = evidence;
+        }
+        public bool Value { get; }
+        public string OriginalSourceText { get; }
+        public string ResolvedPath { get; }
+        public BooleanConstantSource Source { get; }
+        public string Evidence { get; }
+    }
+
     public sealed class BehaviourExpression
     {
         public BehaviourExpression(
             BehaviourExpressionKind kind, string displayText, string operand,
             string resolvedPath, bool? constantValue,
             IReadOnlyList<BehaviourExpression> children)
+            : this(kind, displayText, operand, resolvedPath, constantValue,
+                children, null)
+        {
+        }
+
+        public BehaviourExpression(
+            BehaviourExpressionKind kind, string displayText, string operand,
+            string resolvedPath, bool? constantValue,
+            IReadOnlyList<BehaviourExpression> children,
+            ResolvedBooleanConstant resolvedConstant)
         {
             Kind = kind;
             DisplayText = displayText;
@@ -42,6 +122,7 @@ namespace TiaFds.Analysis
             ResolvedPath = resolvedPath;
             ConstantValue = constantValue;
             Children = Copy(children);
+            ResolvedConstant = resolvedConstant;
         }
         public BehaviourExpressionKind Kind { get; }
         public string DisplayText { get; }
@@ -49,6 +130,7 @@ namespace TiaFds.Analysis
         public string ResolvedPath { get; }
         public bool? ConstantValue { get; }
         public IReadOnlyList<BehaviourExpression> Children { get; }
+        public ResolvedBooleanConstant ResolvedConstant { get; }
 
         private static IReadOnlyList<BehaviourExpression> Copy(
             IReadOnlyList<BehaviourExpression> source)
@@ -58,6 +140,54 @@ namespace TiaFds.Analysis
             for (var index = 0; index < source.Count; index++) result[index] = source[index];
             return result;
         }
+    }
+
+    public sealed class BehaviourConstantFinding
+    {
+        public BehaviourConstantFinding(
+            BehaviourConstantFindingKind findingKind, string severity,
+            string moduleFamily, string moduleName, string moduleMemberPath,
+            BehaviouralConditionKind conditionKind, string conditionMember,
+            string originalExpression, string simplifiedExpression,
+            bool? constantValue, BehaviourReviewClassification reviewClassification,
+            string semanticRule, int? blockNumber, string blockName,
+            int? networkNumber, string networkTitle, string message)
+        {
+            FindingKind = findingKind;
+            Severity = severity;
+            ModuleFamily = moduleFamily;
+            ModuleName = moduleName;
+            ModuleMemberPath = moduleMemberPath;
+            ConditionKind = conditionKind;
+            ConditionMember = conditionMember;
+            OriginalExpression = originalExpression;
+            SimplifiedExpression = simplifiedExpression;
+            ConstantValue = constantValue;
+            ReviewClassification = reviewClassification;
+            SemanticRule = semanticRule;
+            BlockNumber = blockNumber;
+            BlockName = blockName;
+            NetworkNumber = networkNumber;
+            NetworkTitle = networkTitle;
+            Message = message;
+        }
+        public BehaviourConstantFindingKind FindingKind { get; }
+        public string Severity { get; }
+        public string ModuleFamily { get; }
+        public string ModuleName { get; }
+        public string ModuleMemberPath { get; }
+        public BehaviouralConditionKind ConditionKind { get; }
+        public string ConditionMember { get; }
+        public string OriginalExpression { get; }
+        public string SimplifiedExpression { get; }
+        public bool? ConstantValue { get; }
+        public BehaviourReviewClassification ReviewClassification { get; }
+        public string SemanticRule { get; }
+        public int? BlockNumber { get; }
+        public string BlockName { get; }
+        public int? NetworkNumber { get; }
+        public string NetworkTitle { get; }
+        public string Message { get; }
     }
 
     public sealed class BehaviouralCondition
@@ -72,6 +202,33 @@ namespace TiaFds.Analysis
             string blockLanguage, int? networkNumber, string networkTitle,
             string networkComment, int statementOrder,
             BehaviouralConditionResolutionStatus resolutionStatus)
+            : this(moduleFamily, moduleName, moduleMemberPath, kind, member, index,
+                destinationExpression, resolvedDestinationPath, expression,
+                sourceExpression, sourceOperands, resolvedOperandPaths, description,
+                blockNumber, blockName, blockType, blockLanguage, networkNumber,
+                networkTitle, networkComment, statementOrder, resolutionStatus,
+                expression, null, BehaviourExpressionSimplificationStatus.NotSimplified,
+                BehaviourConditionEffect.Unknown,
+                BehaviourReviewClassification.RequiresManualInterpretation,
+                null, null)
+        {
+        }
+
+        public BehaviouralCondition(
+            string moduleFamily, string moduleName, string moduleMemberPath,
+            BehaviouralConditionKind kind, string member, int? index,
+            string destinationExpression, string resolvedDestinationPath,
+            BehaviourExpression originalExpression, string sourceExpression,
+            IReadOnlyList<string> sourceOperands, IReadOnlyList<string> resolvedOperandPaths,
+            string description, int? blockNumber, string blockName, string blockType,
+            string blockLanguage, int? networkNumber, string networkTitle,
+            string networkComment, int statementOrder,
+            BehaviouralConditionResolutionStatus resolutionStatus,
+            BehaviourExpression simplifiedExpression, bool? effectiveConstantValue,
+            BehaviourExpressionSimplificationStatus simplificationStatus,
+            BehaviourConditionEffect effect,
+            BehaviourReviewClassification reviewClassification,
+            string semanticRule, IReadOnlyList<BehaviourConstantFinding> constantFindings)
         {
             ModuleFamily = moduleFamily;
             ModuleName = moduleName;
@@ -81,7 +238,7 @@ namespace TiaFds.Analysis
             Index = index;
             DestinationExpression = destinationExpression;
             ResolvedDestinationPath = resolvedDestinationPath;
-            Expression = expression;
+            Expression = originalExpression;
             SourceExpression = sourceExpression;
             SourceOperands = Copy(sourceOperands);
             ResolvedOperandPaths = Copy(resolvedOperandPaths);
@@ -95,6 +252,13 @@ namespace TiaFds.Analysis
             NetworkComment = networkComment;
             StatementOrder = statementOrder;
             ResolutionStatus = resolutionStatus;
+            SimplifiedExpression = simplifiedExpression;
+            EffectiveConstantValue = effectiveConstantValue;
+            SimplificationStatus = simplificationStatus;
+            Effect = effect;
+            ReviewClassification = reviewClassification;
+            SemanticRule = semanticRule;
+            ConstantFindings = Copy(constantFindings);
         }
         public string ModuleFamily { get; }
         public string ModuleName { get; }
@@ -105,6 +269,14 @@ namespace TiaFds.Analysis
         public string DestinationExpression { get; }
         public string ResolvedDestinationPath { get; }
         public BehaviourExpression Expression { get; }
+        public BehaviourExpression OriginalExpression { get { return Expression; } }
+        public BehaviourExpression SimplifiedExpression { get; }
+        public bool? EffectiveConstantValue { get; }
+        public BehaviourExpressionSimplificationStatus SimplificationStatus { get; }
+        public BehaviourConditionEffect Effect { get; }
+        public BehaviourReviewClassification ReviewClassification { get; }
+        public string SemanticRule { get; }
+        public IReadOnlyList<BehaviourConstantFinding> ConstantFindings { get; }
         public string SourceExpression { get; }
         public IReadOnlyList<string> SourceOperands { get; }
         public IReadOnlyList<string> ResolvedOperandPaths { get; }
@@ -124,6 +296,17 @@ namespace TiaFds.Analysis
             if (source == null || source.Count == 0) return new string[0];
             var result = new string[source.Count];
             for (var index = 0; index < source.Count; index++) result[index] = source[index];
+            return result;
+        }
+
+        private static IReadOnlyList<BehaviourConstantFinding> Copy(
+            IReadOnlyList<BehaviourConstantFinding> source)
+        {
+            if (source == null || source.Count == 0)
+                return new BehaviourConstantFinding[0];
+            var result = new BehaviourConstantFinding[source.Count];
+            for (var index = 0; index < source.Count; index++)
+                result[index] = source[index];
             return result;
         }
     }
@@ -201,11 +384,26 @@ namespace TiaFds.Analysis
             Conditions = CopyAndSort(conditions);
             Diagnostics = CopyAndSort(diagnostics);
             ManualReview = CopyAndSort(manualReview);
+            var findings = new List<BehaviourConstantFinding>();
+            foreach (BehaviouralCondition condition in Conditions)
+                findings.AddRange(condition.ConstantFindings);
+            findings.Sort((left, right) =>
+            {
+                int value = Compare(left.ModuleFamily, right.ModuleFamily);
+                if (value != 0) return value;
+                value = Compare(left.ModuleMemberPath, right.ModuleMemberPath);
+                if (value != 0) return value;
+                value = left.ConditionKind.CompareTo(right.ConditionKind);
+                if (value != 0) return value;
+                return left.FindingKind.CompareTo(right.FindingKind);
+            });
+            ConstantFindings = findings.ToArray();
             LogicAssignmentsAvailable = logicAssignmentsAvailable;
         }
         public IReadOnlyList<BehaviouralCondition> Conditions { get; }
         public IReadOnlyList<BehaviouralDiagnostic> Diagnostics { get; }
         public IReadOnlyList<BehaviouralManualReviewItem> ManualReview { get; }
+        public IReadOnlyList<BehaviourConstantFinding> ConstantFindings { get; }
         public bool LogicAssignmentsAvailable { get; }
 
         private static IReadOnlyList<BehaviouralCondition> CopyAndSort(

@@ -161,7 +161,7 @@
           "resolvedDestinationPath": "db.cm.Drv.BP_M16006.SA",
           "sourceExpression": {
             "kind": "And",
-            "displayText": "AutoMode AND (SequenceRequest OR ManualStart)",
+            "displayText": "AutoMode AND (SequenceRequest OR ManualStart) AND glb.One",
             "children": [
               {
                 "kind": "Operand",
@@ -186,10 +186,15 @@
                     "children": []
                   }
                 ]
+              },
+              {
+                "kind": "Operand",
+                "displayText": "glb.One",
+                "children": []
               }
             ]
           },
-          "originalSourceText": "AutoMode AND (SequenceRequest OR ManualStart)",
+          "originalSourceText": "AutoMode AND (SequenceRequest OR ManualStart) AND glb.One",
           "blockName": "ProcessDrives",
           "blockNumber": 100,
           "blockType": "Function",
@@ -198,6 +203,36 @@
           "networkTitle": "Automatic start",
           "networkComment": "Sanitized representative condition.",
           "statementOrder": 1,
+          "resolutionStatus": "Complete"
+        },
+        {
+          "destinationExpression": "db.cm.Drv.BP_M16006.CR1",
+          "resolvedDestinationPath": "db.cm.Drv.BP_M16006.CR1",
+          "sourceExpression": {
+            "kind": "And",
+            "displayText": "db.Mode.Auto AND glb.Zero",
+            "children": [
+              {
+                "kind": "Operand",
+                "displayText": "db.Mode.Auto",
+                "resolvedPath": "db.Mode.Auto",
+                "children": []
+              },
+              {
+                "kind": "Operand",
+                "displayText": "glb.Zero",
+                "children": []
+              }
+            ]
+          },
+          "originalSourceText": "db.Mode.Auto AND glb.Zero",
+          "blockName": "ProcessDrives",
+          "blockNumber": 100,
+          "blockType": "Function",
+          "blockLanguage": "LAD",
+          "networkNumber": 140,
+          "networkTitle": "Disabled request",
+          "statementOrder": 2,
           "resolutionStatus": "Complete"
         },
         {
@@ -216,7 +251,7 @@
           "blockLanguage": "LAD",
           "networkNumber": 141,
           "networkTitle": "Control request",
-          "statementOrder": 2,
+          "statementOrder": 3,
           "resolutionStatus": "Complete"
         },
         {
@@ -234,7 +269,7 @@
           "blockLanguage": "LAD",
           "networkNumber": 142,
           "networkTitle": "Interlock requires review",
-          "statementOrder": 3,
+          "statementOrder": 4,
           "resolutionStatus": "Partial"
         }
       ],

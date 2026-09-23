@@ -34,6 +34,39 @@ namespace TiaFds.Reporting
             writer.WriteLine("  Unresolved:        {0,5}", behaviour.UnresolvedCount);
             writer.WriteLine("  Ambiguous:         {0,5}", behaviour.AmbiguousCount);
             writer.WriteLine();
+            writer.WriteLine("Constant and bypass analysis:");
+            writer.WriteLine("  Dynamic:           {0,5}", behaviour.DynamicConditionCount);
+            writer.WriteLine("  Permanently TRUE:  {0,5}", behaviour.PermanentlyTrueCount);
+            writer.WriteLine("  Permanently FALSE: {0,5}", behaviour.PermanentlyFalseCount);
+            writer.WriteLine("  Permanently enabled:{0,4}", behaviour.PermanentlyEnabledCount);
+            writer.WriteLine("  Permanently disabled:{0,3}", behaviour.PermanentlyDisabledCount);
+            writer.WriteLine("  Bridged/bypassed:  {0,5}", behaviour.BridgedOrBypassedCount);
+            writer.WriteLine("  Permanently asserted:{0,3}", behaviour.PermanentlyAssertedCount);
+            writer.WriteLine("  Semantic review:   {0,5}", behaviour.SemanticReviewRequiredCount);
+            var noteworthy = new List<AnalysisBehaviouralCondition>();
+            foreach (AnalysisBehaviouralCondition condition in report.BehaviouralConditions)
+                if (condition.EffectiveConstantValue.HasValue)
+                    noteworthy.Add(condition);
+            if (noteworthy.Count > 0)
+            {
+                writer.WriteLine("  Noteworthy conditions:");
+                int limit = Math.Min(10, noteworthy.Count);
+                for (var index = 0; index < limit; index++)
+                {
+                    AnalysisBehaviouralCondition condition = noteworthy[index];
+                    writer.WriteLine("    [{0}] {1} {2} = {3}",
+                        condition.ReviewClassification,
+                        condition.ModuleName, condition.Member,
+                        condition.EffectiveConstantValue.Value
+                            ? "TRUE"
+                            : "FALSE");
+                    writer.WriteLine("      Source: {0}", condition.SourceExpression);
+                }
+                if (noteworthy.Count > limit)
+                    writer.WriteLine("    ... {0} more in JSON/Excel",
+                        noteworthy.Count - limit);
+            }
+            writer.WriteLine();
             writer.WriteLine("Processing variants:");
             if (report.ProcessingVariants.Count == 0) writer.WriteLine("  None");
             foreach (AnalysisVariantSummary variant in report.ProcessingVariants)

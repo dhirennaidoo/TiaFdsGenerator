@@ -16,7 +16,7 @@ namespace TiaFds.Reporting
     [JsonObject(MemberSerialization.OptIn)]
     public sealed class AnalysisReport
     {
-        public const string CurrentSchemaVersion = "1.1";
+        public const string CurrentSchemaVersion = "1.2";
 
         public AnalysisReport(
             AnalysisProjectInfo project,
@@ -294,6 +294,36 @@ namespace TiaFds.Reporting
         }
         [JsonIgnore]
         public IReadOnlyList<AnalysisBehaviouralCondition> BehaviouralConditions { get; }
+        [JsonProperty("dynamicBehaviourCount")]
+        public int DynamicBehaviourCount
+        {
+            get { return Count(AnalysisBehaviourConditionEffect.Dynamic, null); }
+        }
+        [JsonProperty("permanentlyTrueCount")]
+        public int PermanentlyTrueCount
+        {
+            get { return Count(AnalysisBehaviourConditionEffect.PermanentlyTrue, null); }
+        }
+        [JsonProperty("permanentlyFalseCount")]
+        public int PermanentlyFalseCount
+        {
+            get { return Count(AnalysisBehaviourConditionEffect.PermanentlyFalse, null); }
+        }
+        [JsonProperty("bridgedConditionCount")]
+        public int BridgedConditionCount
+        {
+            get { return Count(null, AnalysisBehaviourReviewClassification.BridgedOrBypassed); }
+        }
+        [JsonProperty("disabledConditionCount")]
+        public int DisabledConditionCount
+        {
+            get { return Count(null, AnalysisBehaviourReviewClassification.PermanentlyDisabled); }
+        }
+        [JsonProperty("behaviourReviewRequiredCount")]
+        public int BehaviourReviewRequiredCount
+        {
+            get { return Count(null, AnalysisBehaviourReviewClassification.RequiresManualInterpretation); }
+        }
 
         private IReadOnlyList<AnalysisBehaviouralCondition> Filter(
             AnalysisBehaviouralConditionKind kind)
@@ -302,6 +332,19 @@ namespace TiaFds.Reporting
             foreach (AnalysisBehaviouralCondition condition in BehaviouralConditions)
                 if (condition.Kind == kind) result.Add(condition);
             return result.ToArray();
+        }
+
+        private int Count(
+            AnalysisBehaviourConditionEffect? effect,
+            AnalysisBehaviourReviewClassification? review)
+        {
+            var result = 0;
+            foreach (AnalysisBehaviouralCondition condition in BehaviouralConditions)
+                if ((!effect.HasValue || condition.Effect == effect.Value) &&
+                    (!review.HasValue ||
+                     condition.ReviewClassification == review.Value))
+                    result++;
+            return result;
         }
     }
 
@@ -427,16 +470,70 @@ namespace TiaFds.Reporting
         Unknown
     }
 
+    public enum AnalysisBooleanConstantSource
+    {
+        Literal,
+        DeclaredConstant,
+        KnownProjectSymbol,
+        PropagatedExpression,
+        TemporaryTrace,
+        Unknown
+    }
+
+    public enum AnalysisBehaviourExpressionSimplificationStatus
+    {
+        NotSimplified,
+        Simplified,
+        ConstantTrue,
+        ConstantFalse,
+        Partial,
+        Unsupported
+    }
+
+    public enum AnalysisBehaviourConditionEffect
+    {
+        Dynamic,
+        PermanentlyTrue,
+        PermanentlyFalse,
+        PartiallySimplified,
+        Unknown
+    }
+
+    public enum AnalysisBehaviourReviewClassification
+    {
+        NormalDynamicCondition,
+        PermanentlyEnabled,
+        PermanentlyDisabled,
+        BridgedOrBypassed,
+        PermanentlyAsserted,
+        RequiresManualInterpretation
+    }
+
     [JsonObject(MemberSerialization.OptIn)]
     public sealed class AnalysisBehaviourSummary
     {
         internal static readonly AnalysisBehaviourSummary Empty =
-            new AnalysisBehaviourSummary(0, 0, 0, 0, 0, 0, 0, 0, 0);
+            new AnalysisBehaviourSummary(0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0);
 
         public AnalysisBehaviourSummary(
             int totalConditionCount, int startCommandCount, int controlRequestCount,
             int interlockCount, int completeCount, int partialCount,
             int unsupportedCount, int unresolvedCount, int ambiguousCount)
+            : this(totalConditionCount, startCommandCount, controlRequestCount,
+                interlockCount, completeCount, partialCount, unsupportedCount,
+                unresolvedCount, ambiguousCount, 0, 0, 0, 0, 0, 0, 0, 0)
+        {
+        }
+
+        public AnalysisBehaviourSummary(
+            int totalConditionCount, int startCommandCount, int controlRequestCount,
+            int interlockCount, int completeCount, int partialCount,
+            int unsupportedCount, int unresolvedCount, int ambiguousCount,
+            int dynamicConditionCount, int permanentlyTrueCount,
+            int permanentlyFalseCount, int permanentlyEnabledCount,
+            int permanentlyDisabledCount, int bridgedOrBypassedCount,
+            int permanentlyAssertedCount, int semanticReviewRequiredCount)
         {
             TotalConditionCount = totalConditionCount;
             StartCommandCount = startCommandCount;
@@ -447,6 +544,14 @@ namespace TiaFds.Reporting
             UnsupportedCount = unsupportedCount;
             UnresolvedCount = unresolvedCount;
             AmbiguousCount = ambiguousCount;
+            DynamicConditionCount = dynamicConditionCount;
+            PermanentlyTrueCount = permanentlyTrueCount;
+            PermanentlyFalseCount = permanentlyFalseCount;
+            PermanentlyEnabledCount = permanentlyEnabledCount;
+            PermanentlyDisabledCount = permanentlyDisabledCount;
+            BridgedOrBypassedCount = bridgedOrBypassedCount;
+            PermanentlyAssertedCount = permanentlyAssertedCount;
+            SemanticReviewRequiredCount = semanticReviewRequiredCount;
         }
         [JsonProperty("totalConditionCount")] public int TotalConditionCount { get; }
         [JsonProperty("startCommandCount")] public int StartCommandCount { get; }
@@ -457,6 +562,34 @@ namespace TiaFds.Reporting
         [JsonProperty("unsupportedCount")] public int UnsupportedCount { get; }
         [JsonProperty("unresolvedCount")] public int UnresolvedCount { get; }
         [JsonProperty("ambiguousCount")] public int AmbiguousCount { get; }
+        [JsonProperty("dynamicConditionCount")] public int DynamicConditionCount { get; }
+        [JsonProperty("permanentlyTrueCount")] public int PermanentlyTrueCount { get; }
+        [JsonProperty("permanentlyFalseCount")] public int PermanentlyFalseCount { get; }
+        [JsonProperty("permanentlyEnabledCount")] public int PermanentlyEnabledCount { get; }
+        [JsonProperty("permanentlyDisabledCount")] public int PermanentlyDisabledCount { get; }
+        [JsonProperty("bridgedOrBypassedCount")] public int BridgedOrBypassedCount { get; }
+        [JsonProperty("permanentlyAssertedCount")] public int PermanentlyAssertedCount { get; }
+        [JsonProperty("semanticReviewRequiredCount")] public int SemanticReviewRequiredCount { get; }
+    }
+
+    [JsonObject(MemberSerialization.OptIn)]
+    public sealed class AnalysisResolvedBooleanConstant
+    {
+        public AnalysisResolvedBooleanConstant(
+            bool value, string originalSourceText, string resolvedPath,
+            AnalysisBooleanConstantSource source, string evidence)
+        {
+            Value = value;
+            OriginalSourceText = originalSourceText;
+            ResolvedPath = resolvedPath;
+            Source = source;
+            Evidence = evidence;
+        }
+        [JsonProperty("value")] public bool Value { get; }
+        [JsonProperty("originalSourceText")] public string OriginalSourceText { get; }
+        [JsonProperty("resolvedPath")] public string ResolvedPath { get; }
+        [JsonProperty("source")] public AnalysisBooleanConstantSource Source { get; }
+        [JsonProperty("evidence")] public string Evidence { get; }
     }
 
     [JsonObject(MemberSerialization.OptIn)]
@@ -466,6 +599,16 @@ namespace TiaFds.Reporting
             AnalysisBehaviourExpressionKind kind, string displayText, string operand,
             string resolvedPath, bool? constantValue,
             IReadOnlyList<AnalysisBehaviourExpression> children)
+            : this(kind, displayText, operand, resolvedPath, constantValue,
+                children, null)
+        {
+        }
+
+        public AnalysisBehaviourExpression(
+            AnalysisBehaviourExpressionKind kind, string displayText, string operand,
+            string resolvedPath, bool? constantValue,
+            IReadOnlyList<AnalysisBehaviourExpression> children,
+            AnalysisResolvedBooleanConstant resolvedConstant)
         {
             Kind = kind;
             DisplayText = displayText;
@@ -473,6 +616,7 @@ namespace TiaFds.Reporting
             ResolvedPath = resolvedPath;
             ConstantValue = constantValue;
             Children = AnalysisReport.Copy(children);
+            ResolvedConstant = resolvedConstant;
         }
         [JsonProperty("kind")] public AnalysisBehaviourExpressionKind Kind { get; }
         [JsonProperty("displayText")] public string DisplayText { get; }
@@ -480,6 +624,7 @@ namespace TiaFds.Reporting
         [JsonProperty("resolvedPath")] public string ResolvedPath { get; }
         [JsonProperty("constantValue")] public bool? ConstantValue { get; }
         [JsonProperty("children")] public IReadOnlyList<AnalysisBehaviourExpression> Children { get; }
+        [JsonProperty("constant")] public AnalysisResolvedBooleanConstant ResolvedConstant { get; }
     }
 
     [JsonObject(MemberSerialization.OptIn)]
@@ -495,6 +640,36 @@ namespace TiaFds.Reporting
             string blockLanguage, int? networkNumber, string networkTitle,
             string networkComment, int statementOrder,
             AnalysisBehaviouralResolutionStatus resolutionStatus, int diagnosticCount)
+            : this(moduleFamily, moduleName, moduleMemberPath, kind, member, index,
+                destinationExpression, resolvedDestinationPath, expression,
+                sourceExpression, sourceOperands, resolvedOperandPaths, description,
+                blockNumber, blockName, blockType, blockLanguage, networkNumber,
+                networkTitle, networkComment, statementOrder, resolutionStatus,
+                diagnosticCount, expression, null,
+                AnalysisBehaviourExpressionSimplificationStatus.NotSimplified,
+                AnalysisBehaviourConditionEffect.Unknown,
+                AnalysisBehaviourReviewClassification.RequiresManualInterpretation,
+                null, null)
+        {
+        }
+
+        public AnalysisBehaviouralCondition(
+            string moduleFamily, string moduleName, string moduleMemberPath,
+            AnalysisBehaviouralConditionKind kind, string member, int? index,
+            string destinationExpression, string resolvedDestinationPath,
+            AnalysisBehaviourExpression originalExpression, string sourceExpression,
+            IReadOnlyList<string> sourceOperands, IReadOnlyList<string> resolvedOperandPaths,
+            string description, int? blockNumber, string blockName, string blockType,
+            string blockLanguage, int? networkNumber, string networkTitle,
+            string networkComment, int statementOrder,
+            AnalysisBehaviouralResolutionStatus resolutionStatus, int diagnosticCount,
+            AnalysisBehaviourExpression simplifiedExpression,
+            bool? effectiveConstantValue,
+            AnalysisBehaviourExpressionSimplificationStatus simplificationStatus,
+            AnalysisBehaviourConditionEffect effect,
+            AnalysisBehaviourReviewClassification reviewClassification,
+            string semanticRule,
+            IReadOnlyList<AnalysisBehaviourConstantFinding> constantFindings)
         {
             ModuleFamily = moduleFamily;
             ModuleName = moduleName;
@@ -504,7 +679,7 @@ namespace TiaFds.Reporting
             Index = index;
             DestinationExpression = destinationExpression;
             ResolvedDestinationPath = resolvedDestinationPath;
-            Expression = expression;
+            Expression = originalExpression;
             SourceExpression = sourceExpression;
             SourceOperands = AnalysisReport.Copy(sourceOperands);
             ResolvedOperandPaths = AnalysisReport.Copy(resolvedOperandPaths);
@@ -519,6 +694,13 @@ namespace TiaFds.Reporting
             StatementOrder = statementOrder;
             ResolutionStatus = resolutionStatus;
             DiagnosticCount = diagnosticCount;
+            SimplifiedExpression = simplifiedExpression;
+            EffectiveConstantValue = effectiveConstantValue;
+            SimplificationStatus = simplificationStatus;
+            Effect = effect;
+            ReviewClassification = reviewClassification;
+            SemanticRule = semanticRule;
+            ConstantFindings = AnalysisReport.Copy(constantFindings);
         }
         [JsonProperty("moduleFamily")] public string ModuleFamily { get; }
         [JsonProperty("moduleName")] public string ModuleName { get; }
@@ -529,6 +711,24 @@ namespace TiaFds.Reporting
         [JsonProperty("destination")] public string DestinationExpression { get; }
         [JsonProperty("resolvedDestinationPath")] public string ResolvedDestinationPath { get; }
         [JsonProperty("expression")] public AnalysisBehaviourExpression Expression { get; }
+        [JsonProperty("originalExpression")] public AnalysisBehaviourExpression OriginalExpression
+        {
+            get { return Expression; }
+        }
+        [JsonProperty("simplifiedExpression")] public AnalysisBehaviourExpression SimplifiedExpression { get; }
+        [JsonProperty("simplifiedDisplayText")] public string SimplifiedDisplayText
+        {
+            get { return SimplifiedExpression == null ? null : SimplifiedExpression.DisplayText; }
+        }
+        [JsonProperty("effectiveConstantValue")] public bool? EffectiveConstantValue { get; }
+        [JsonProperty("simplificationStatus")]
+        public AnalysisBehaviourExpressionSimplificationStatus SimplificationStatus { get; }
+        [JsonProperty("effect")] public AnalysisBehaviourConditionEffect Effect { get; }
+        [JsonProperty("reviewClassification")]
+        public AnalysisBehaviourReviewClassification ReviewClassification { get; }
+        [JsonProperty("semanticRule")] public string SemanticRule { get; }
+        [JsonProperty("constantFindings")]
+        public IReadOnlyList<AnalysisBehaviourConstantFinding> ConstantFindings { get; }
         [JsonProperty("sourceExpression")] public string SourceExpression { get; }
         [JsonProperty("sourceOperands")] public IReadOnlyList<string> SourceOperands { get; }
         [JsonProperty("resolvedOperandPaths")] public IReadOnlyList<string> ResolvedOperandPaths { get; }
@@ -543,6 +743,55 @@ namespace TiaFds.Reporting
         [JsonProperty("statementOrder")] public int StatementOrder { get; }
         [JsonProperty("resolutionStatus")] public AnalysisBehaviouralResolutionStatus ResolutionStatus { get; }
         [JsonProperty("diagnosticCount")] public int DiagnosticCount { get; }
+    }
+
+    [JsonObject(MemberSerialization.OptIn)]
+    public sealed class AnalysisBehaviourConstantFinding
+    {
+        public AnalysisBehaviourConstantFinding(
+            string findingKind, string severity, string moduleFamily,
+            string moduleName, string moduleMemberPath, string conditionKind,
+            string conditionMember, string originalExpression,
+            string simplifiedExpression, bool? constantValue,
+            string reviewClassification, string semanticRule,
+            int? blockNumber, string blockName, int? networkNumber,
+            string networkTitle, string message)
+        {
+            FindingKind = findingKind;
+            Severity = severity;
+            ModuleFamily = moduleFamily;
+            ModuleName = moduleName;
+            ModuleMemberPath = moduleMemberPath;
+            ConditionKind = conditionKind;
+            ConditionMember = conditionMember;
+            OriginalExpression = originalExpression;
+            SimplifiedExpression = simplifiedExpression;
+            ConstantValue = constantValue;
+            ReviewClassification = reviewClassification;
+            SemanticRule = semanticRule;
+            BlockNumber = blockNumber;
+            BlockName = blockName;
+            NetworkNumber = networkNumber;
+            NetworkTitle = networkTitle;
+            Message = message;
+        }
+        [JsonProperty("findingKind")] public string FindingKind { get; }
+        [JsonProperty("severity")] public string Severity { get; }
+        [JsonProperty("moduleFamily")] public string ModuleFamily { get; }
+        [JsonProperty("moduleName")] public string ModuleName { get; }
+        [JsonProperty("moduleMemberPath")] public string ModuleMemberPath { get; }
+        [JsonProperty("conditionKind")] public string ConditionKind { get; }
+        [JsonProperty("conditionMember")] public string ConditionMember { get; }
+        [JsonProperty("originalExpression")] public string OriginalExpression { get; }
+        [JsonProperty("simplifiedExpression")] public string SimplifiedExpression { get; }
+        [JsonProperty("constantValue")] public bool? ConstantValue { get; }
+        [JsonProperty("reviewClassification")] public string ReviewClassification { get; }
+        [JsonProperty("semanticRule")] public string SemanticRule { get; }
+        [JsonProperty("blockNumber")] public int? BlockNumber { get; }
+        [JsonProperty("blockName")] public string BlockName { get; }
+        [JsonProperty("networkNumber")] public int? NetworkNumber { get; }
+        [JsonProperty("networkTitle")] public string NetworkTitle { get; }
+        [JsonProperty("message")] public string Message { get; }
     }
 
     [JsonObject(MemberSerialization.OptIn)]

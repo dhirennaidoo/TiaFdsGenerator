@@ -67,4 +67,54 @@
     </AttributeList>
     <ObjectList><MultilingualText CompositionName="Title"><ObjectList><MultilingualTextItem><AttributeList><Text>Unsupported interlock</Text></AttributeList></MultilingualTextItem></ObjectList></MultilingualText></ObjectList>
   </SW.Blocks.CompileUnit>
+  <SW.Blocks.CompileUnit Number="4">
+    <AttributeList>
+      <NetworkSource>
+        <FlgNet>
+          <Parts>
+            <Access Scope="GlobalVariable" UId="41"><Symbol><Component Name="db.cm.Drv" /><Component Name="M2" /><Component Name="ME" /></Symbol></Access>
+            <Access Scope="GlobalVariable" UId="42"><Symbol><Component Name="db.cm.Drv" /><Component Name="M1" /><Component Name="ILK" /></Symbol></Access>
+            <Part Name="Contact" UId="43" />
+            <Part Name="Coil" UId="44" />
+          </Parts>
+          <Wires>
+            <Wire UId="45"><Powerrail /><NameCon UId="43" Name="in" /></Wire>
+            <Wire UId="46"><IdentCon UId="41" /><NameCon UId="43" Name="operand" /></Wire>
+            <Wire UId="47"><NameCon UId="43" Name="out" /><NameCon UId="44" Name="in" /></Wire>
+            <Wire UId="48"><IdentCon UId="42" /><NameCon UId="44" Name="operand" /></Wire>
+          </Wires>
+        </FlgNet>
+      </NetworkSource>
+    </AttributeList>
+    <ObjectList><MultilingualText CompositionName="Title"><ObjectList><MultilingualTextItem><AttributeList><Text>Drive interlock</Text></AttributeList></MultilingualTextItem></ObjectList></MultilingualText></ObjectList>
+  </SW.Blocks.CompileUnit>
+  <SW.Blocks.CompileUnit Number="5">
+    <AttributeList>
+      <NetworkSource>
+        <FlgNet>
+          <Parts>
+            <Access Scope="GlobalVariable" UId="51"><Symbol><Component Name="db.Bin" /><Component Name="Enabled" /></Symbol></Access>
+            <Access Scope="GlobalVariable" UId="52"><Symbol><Component Name="db.cm.Drv" /><Component Name="M2" /><Component Name="IS" /></Symbol></Access>
+            <Access Scope="GlobalVariable" UId="53"><Symbol><Component Name="db.cm.Vlv" /><Component Name="V1" /><Component Name="LOS" /></Symbol></Access>
+            <Access Scope="GlobalVariable" UId="54"><Symbol><Component Name="db.cm.Drv" /><Component Name="M1" /><Component Name="CR" /></Symbol></Access>
+            <Part Name="Contact" UId="55" />
+            <Part Name="Contact" UId="56" />
+            <Part Name="Contact" UId="57" />
+            <Part Name="Coil" UId="58" />
+          </Parts>
+          <Wires>
+            <Wire UId="59"><Powerrail /><NameCon UId="55" Name="in" /></Wire>
+            <Wire UId="60"><IdentCon UId="51" /><NameCon UId="55" Name="operand" /></Wire>
+            <Wire UId="61"><NameCon UId="55" Name="out" /><NameCon UId="56" Name="in" /></Wire>
+            <Wire UId="62"><IdentCon UId="52" /><NameCon UId="56" Name="operand" /></Wire>
+            <Wire UId="63"><NameCon UId="56" Name="out" /><NameCon UId="57" Name="in" /></Wire>
+            <Wire UId="64"><IdentCon UId="53" /><NameCon UId="57" Name="operand" /></Wire>
+            <Wire UId="65"><NameCon UId="57" Name="out" /><NameCon UId="58" Name="in" /></Wire>
+            <Wire UId="66"><IdentCon UId="54" /><NameCon UId="58" Name="operand" /></Wire>
+          </Wires>
+        </FlgNet>
+      </NetworkSource>
+    </AttributeList>
+    <ObjectList><MultilingualText CompositionName="Title"><ObjectList><MultilingualTextItem><AttributeList><Text>Drive control relay</Text></AttributeList></MultilingualTextItem></ObjectList></MultilingualText></ObjectList>
+  </SW.Blocks.CompileUnit>
 </Document>

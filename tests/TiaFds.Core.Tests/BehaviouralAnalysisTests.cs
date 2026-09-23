@@ -22,13 +22,16 @@ namespace TiaFds.Core.Tests
             var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "db.Auto.Enabled", "db.Sequence.Request",
-                "db.cm.Drv.M1.SA1", "db.cm.Drv.M1.CR2", "db.cm.Drv.M1.ILK3"
+                "db.cm.Drv.M1.SA1", "db.cm.Drv.M1.CR2", "db.cm.Drv.M1.ILK3",
+                "db.cm.Drv.M2.ME", "db.cm.Drv.M1.ILK",
+                "db.Bin.Enabled", "db.cm.Drv.M2.IS",
+                "db.cm.Vlv.V1.LOS", "db.cm.Drv.M1.CR"
             };
             BlockCallParseResult result = new BlockCallXmlParser().Parse(
                 path, "FC_Test", 123, "Function", "Blocks/FC_Test", "LAD", known);
 
             Assert.AreEqual(0, result.Calls.Count);
-            Assert.AreEqual(3, result.Assignments.Count);
+            Assert.AreEqual(5, result.Assignments.Count);
             ExtractedLogicAssignment sa = result.Assignments[0];
             Assert.AreEqual("db.cm.Drv.M1.SA1", sa.ResolvedDestinationPath);
             Assert.AreEqual(ExtractedBooleanExpressionKind.Or, sa.SourceExpression.Kind);
@@ -44,6 +47,20 @@ namespace TiaFds.Core.Tests
             Assert.AreEqual(true, result.Assignments[1].SourceExpression.ConstantValue);
             Assert.AreEqual(ExtractedLogicResolutionStatus.Unsupported,
                 result.Assignments[2].ResolutionStatus);
+            Assert.AreEqual("db.cm.Drv.M1.ILK",
+                result.Assignments[3].ResolvedDestinationPath);
+            Assert.AreEqual("db.cm.Drv.M2.ME",
+                result.Assignments[3].SourceExpression.ResolvedPath);
+            Assert.AreEqual("db.cm.Drv.M1.CR",
+                result.Assignments[4].ResolvedDestinationPath);
+            Assert.AreEqual(ExtractedBooleanExpressionKind.And,
+                result.Assignments[4].SourceExpression.Kind);
+            Assert.AreEqual(2,
+                result.Assignments[4].SourceExpression.Children.Count);
+            Assert.AreEqual(ExtractedBooleanExpressionKind.And,
+                result.Assignments[4].SourceExpression.Children[0].Kind);
+            Assert.AreEqual("db.cm.Vlv.V1.LOS",
+                result.Assignments[4].SourceExpression.Children[1].ResolvedPath);
         }
 
         [TestMethod]
@@ -117,7 +134,7 @@ namespace TiaFds.Core.Tests
                 new AnalysisReportJsonWriter().Write(report, jsonPath);
                 new AnalysisReportExcelWriter().Write(report, excelPath);
                 JObject json = JObject.Parse(File.ReadAllText(jsonPath));
-                Assert.AreEqual("1.1", (string)json["schemaVersion"]);
+                Assert.AreEqual("1.2", (string)json["schemaVersion"]);
                 Assert.AreEqual(8, (int)json["behaviourSummary"]["totalConditionCount"]);
                 Assert.AreEqual("And",
                     (string)json["modules"][0]["interlocks"][0]["expression"]["kind"]);

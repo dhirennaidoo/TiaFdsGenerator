@@ -197,6 +197,17 @@ namespace TiaFds.Reporting
                     string.Equals(diagnostic.Member, source.Member,
                         StringComparison.OrdinalIgnoreCase))
                     count++;
+            var findings = new List<AnalysisBehaviourConstantFinding>();
+            foreach (BehaviourConstantFinding finding in source.ConstantFindings)
+                findings.Add(new AnalysisBehaviourConstantFinding(
+                    finding.FindingKind.ToString(), finding.Severity,
+                    finding.ModuleFamily, finding.ModuleName,
+                    finding.ModuleMemberPath, finding.ConditionKind.ToString(),
+                    finding.ConditionMember, finding.OriginalExpression,
+                    finding.SimplifiedExpression, finding.ConstantValue,
+                    finding.ReviewClassification.ToString(),
+                    finding.SemanticRule, finding.BlockNumber, finding.BlockName,
+                    finding.NetworkNumber, finding.NetworkTitle, finding.Message));
             return new AnalysisBehaviouralCondition(
                 source.ModuleFamily, source.ModuleName, source.ModuleMemberPath,
                 (AnalysisBehaviouralConditionKind)Enum.Parse(
@@ -210,7 +221,18 @@ namespace TiaFds.Reporting
                 (AnalysisBehaviouralResolutionStatus)Enum.Parse(
                     typeof(AnalysisBehaviouralResolutionStatus),
                     source.ResolutionStatus.ToString(), false),
-                count);
+                count, CopyExpression(source.SimplifiedExpression),
+                source.EffectiveConstantValue,
+                (AnalysisBehaviourExpressionSimplificationStatus)Enum.Parse(
+                    typeof(AnalysisBehaviourExpressionSimplificationStatus),
+                    source.SimplificationStatus.ToString(), false),
+                (AnalysisBehaviourConditionEffect)Enum.Parse(
+                    typeof(AnalysisBehaviourConditionEffect),
+                    source.Effect.ToString(), false),
+                (AnalysisBehaviourReviewClassification)Enum.Parse(
+                    typeof(AnalysisBehaviourReviewClassification),
+                    source.ReviewClassification.ToString(), false),
+                source.SemanticRule, findings.ToArray());
         }
 
         private static AnalysisBehaviourExpression CopyExpression(
@@ -220,11 +242,21 @@ namespace TiaFds.Reporting
             var children = new List<AnalysisBehaviourExpression>();
             foreach (BehaviourExpression child in source.Children)
                 children.Add(CopyExpression(child));
+            AnalysisResolvedBooleanConstant constant = source.ResolvedConstant == null
+                ? null
+                : new AnalysisResolvedBooleanConstant(
+                    source.ResolvedConstant.Value,
+                    source.ResolvedConstant.OriginalSourceText,
+                    source.ResolvedConstant.ResolvedPath,
+                    (AnalysisBooleanConstantSource)Enum.Parse(
+                        typeof(AnalysisBooleanConstantSource),
+                        source.ResolvedConstant.Source.ToString(), false),
+                    source.ResolvedConstant.Evidence);
             return new AnalysisBehaviourExpression(
                 (AnalysisBehaviourExpressionKind)Enum.Parse(
                     typeof(AnalysisBehaviourExpressionKind), source.Kind.ToString(), false),
                 source.DisplayText, source.Operand, source.ResolvedPath,
-                source.ConstantValue, children.ToArray());
+                source.ConstantValue, children.ToArray(), constant);
         }
 
         private static AnalysisBehaviourSummary BuildBehaviourSummary(
@@ -239,7 +271,20 @@ namespace TiaFds.Reporting
                 Count(conditions, AnalysisBehaviouralResolutionStatus.Partial),
                 Count(conditions, AnalysisBehaviouralResolutionStatus.Unsupported),
                 Count(conditions, AnalysisBehaviouralResolutionStatus.Unresolved),
-                Count(conditions, AnalysisBehaviouralResolutionStatus.Ambiguous));
+                Count(conditions, AnalysisBehaviouralResolutionStatus.Ambiguous),
+                Count(conditions, AnalysisBehaviourConditionEffect.Dynamic),
+                Count(conditions, AnalysisBehaviourConditionEffect.PermanentlyTrue),
+                Count(conditions, AnalysisBehaviourConditionEffect.PermanentlyFalse),
+                Count(conditions,
+                    AnalysisBehaviourReviewClassification.PermanentlyEnabled),
+                Count(conditions,
+                    AnalysisBehaviourReviewClassification.PermanentlyDisabled),
+                Count(conditions,
+                    AnalysisBehaviourReviewClassification.BridgedOrBypassed),
+                Count(conditions,
+                    AnalysisBehaviourReviewClassification.PermanentlyAsserted),
+                Count(conditions,
+                    AnalysisBehaviourReviewClassification.RequiresManualInterpretation));
         }
 
         private static int Count(
@@ -249,6 +294,26 @@ namespace TiaFds.Reporting
             var count = 0;
             foreach (AnalysisBehaviouralCondition condition in conditions)
                 if (condition.Kind == kind) count++;
+            return count;
+        }
+
+        private static int Count(
+            IReadOnlyList<AnalysisBehaviouralCondition> conditions,
+            AnalysisBehaviourConditionEffect effect)
+        {
+            var count = 0;
+            foreach (AnalysisBehaviouralCondition condition in conditions)
+                if (condition.Effect == effect) count++;
+            return count;
+        }
+
+        private static int Count(
+            IReadOnlyList<AnalysisBehaviouralCondition> conditions,
+            AnalysisBehaviourReviewClassification classification)
+        {
+            var count = 0;
+            foreach (AnalysisBehaviouralCondition condition in conditions)
+                if (condition.ReviewClassification == classification) count++;
             return count;
         }
 

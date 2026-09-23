@@ -69,7 +69,7 @@ TiaFds.Cli.exe ^
 
 Output paths are explicit; parent directories are created and existing files are overwritten. The CLI prints each successfully generated absolute path. A write failure names the affected path and returns exit code `7`.
 
-The JSON reporting schema is `1.1`. The workbook contains these worksheets in order: `Summary`, `Modules`, `Processing Calls`, `Behavioural Conditions`, `Diagnostics`, and `Manual Review`. It uses filterable tables and preserves project text as text so formula-like engineering values are not evaluated by Excel.
+The JSON reporting schema is `1.2`. The workbook contains these worksheets in order: `Summary`, `Modules`, `Processing Calls`, `Behavioural Conditions`, `Diagnostics`, and `Manual Review`. It uses filterable tables and preserves project text as text so formula-like engineering values are not evaluated by Excel.
 
 ## Prerequisites and Siemens reference
 
@@ -127,11 +127,43 @@ assignment. Partial, unsupported, unresolved, and ambiguous conditions are
 retained with `BEH...` diagnostics and manual-review entries. No condition is
 inferred from a network title.
 
-`AnalysisReport.json` schema `1.1` adds `behaviourSummary`,
+`AnalysisReport.json` schema `1.2` includes `behaviourSummary`,
 `behaviouralConditions`, module-level `startCommands`, `controlRequests`, and
-`interlocks`. Excel adds `Behavioural Conditions` between `Processing Calls`
-and `Diagnostics`; Summary and Modules include behavioural counts. Console
-output remains summary-only. FDS prose generation is not implemented.
+`interlocks`. Schema 1.2 preserves both original and simplified expression
+trees and adds constant provenance, effective value, condition effect, semantic
+classification, and structured findings.
+
+The immutable default boolean catalogue recognizes literal `TRUE`/`FALSE` and
+the exact project symbols `glb.One`/`glb.Zero` (including quoted qualified
+forms). Matching is case-insensitive and exact after removing TIA identifier
+quotes. Names that merely contain `One`, `Zero`, `True`, or `False` are not
+constants. Numeric `0`/`1` remain unresolved without unambiguous boolean
+datatype evidence.
+
+Analysis simplifies supported NOT/AND/OR trees and bounded local-temporary
+traces. Absorbing rules such as `FALSE AND Unknown = FALSE` and
+`TRUE OR Unknown = TRUE` are safe; writable markers, DB bits, and globals are
+never inferred constant from a single write.
+
+SA and CR are treated as active-high request channels: constant TRUE is
+permanently enabled and constant FALSE is permanently disabled. The exported
+`cm.DrvType1` implementation demonstrates that `Drv.ILK` is an active-high
+permissive in the motor-output path `(CR OR OVR) AND (ILK OR OVR)`. The library
+owner confirmed that all Drive processing variants share this ILK and CR
+polarity. For modules implemented by recognized `DrvType*` variants, ILK TRUE
+is therefore reported as bridged/bypassed and ILK FALSE as permanently
+asserted. Non-Drive families and missing variant evidence still require manual
+interpretation.
+
+Excel retains six worksheets rather than adding a separate findings sheet.
+The normalized `Behavioural Conditions` table contains the constant,
+simplification, effect, review, and finding columns, keeping every noteworthy
+row filterable without duplicating condition data. Summary and Modules include
+constant/bypass counts, and console output prints a bounded noteworthy list.
+FDS prose generation is not implemented.
+
+A constant result is a static code-analysis finding, not evidence of the live
+PLC state.
 
 The supported boundary and the real FC501 pattern are documented in
 [`docs/behavioural-analysis.md`](docs/behavioural-analysis.md).
