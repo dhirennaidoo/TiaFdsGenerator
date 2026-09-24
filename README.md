@@ -200,10 +200,12 @@ TiaFds.Step7.Extract.Cli.exe ^
   --input "D:\Projects\A-Mill\A-Mill.s7p" ^
   --plc "S7 Program" ^
   --include-db-structures ^
+  --include-block-calls ^
   --export-json "C:\Exports\A-Mill.json" ^
   --overwrite
 
-TiaFds.Cli.exe --import-json "C:\Exports\A-Mill.json" --discover-modules
+TiaFds.Cli.exe --import-json "C:\Exports\A-Mill.json" --analyze-module-calls ^
+  --report-json "C:\Reports\A-Mill.report.json" --report-excel "C:\Reports\A-Mill.report.xlsx"
 ```
 
 `--plc` accepts the S7 program name, its CPU name, or
@@ -226,11 +228,39 @@ Classic diagnostics use the `S7C` prefix:
 - `S7C003_BLOCK_KNOW_HOW_PROTECTED`
 - `S7C004_UDT_SYMBOL_NOT_FOUND`
 - `S7C005_SYMBOL_TABLE_NOT_FOUND`
+- `S7C006_POINTER_NOT_RESOLVED`
+- `S7C007_CALLED_BLOCK_NOT_IN_PROJECT`
 
-Phase 1 covers inventory and DB structures, so `--discover-modules` works on
-Classic snapshots. `--include-block-calls` is rejected until block-call and
-STL logic extraction are implemented; `--analyze-module-calls` therefore
-reports `CM100_BLOCK_CALLS_NOT_EXTRACTED` for Classic snapshots.
+### Classic block calls
+
+`--include-block-calls` decompiles every OB, FC and FB (MC7 → STL, which
+covers LAD, FBD and STL blocks alike) and reads `CALL`/`UC`/`CC`
+statements. It always decodes the DB layouts as well, because STEP 7 passes
+UDT and ANY arguments as absolute pointers:
+
+```text
+CALL "FnBlk.cm.Drv" (... Drv := P#DB50.DBX 400.0)
+                                  |
+      DB50 layout: 400.0  AM_M1035 : Udt.cm.Drv   <- formal type of Drv
+                   400.0  AM_M1035.MO : BOOL
+                                  v
+resolvedMemberPath = db.cm.Drv.AM_M1035
+```
+
+A pointer resolves only when exactly one member starts at that address with
+the formal parameter's datatype, taken from the called block's interface.
+Otherwise the call keeps its actual expression and reports
+`S7C006_POINTER_NOT_RESOLVED` with the candidates, and correlation reports
+`CM104`. LAD boolean inputs arriving through local bits (`RN := L 0.0`) are
+kept as actual expressions and are not traced yet.
+
+Call records follow the TIA conventions (directions `Input`/`Output`/`InOut`,
+1-based ordinal per calling block, caller path `Blocks/<name>`). `CM122` is
+raised only for FC/SFC calls: unassigned FB/SFB parameters are optional
+because they live in the instance DB.
+
+Logic assignments (SA/CR/ILK, CmdSA set/reset) are not extracted yet, so
+Classic reports contain no behavioural conditions.
 
 ## TIA extraction
 
@@ -323,7 +353,21 @@ Function name is the primary identity. Expected FC numbers validate known drive 
 | Speed | `cm.SpdType0` | — | SpdType0 | `Udt.cm.Spd` |
 | Speed | `cm.SpdType1` | — | SpdType1 | `Udt.cm.Spd` |
 
-A changed drive FC number produces `CM113_FUNCTION_NUMBER_MISMATCH` but the name-matched call evidence is retained.
+STEP 7 Classic projects use the older library generation, with one processing FC per family. The drive type there is a runtime INT (`Drv.DrvType`), not a separate FC:
+
+| Family | Function | Expected number | Variant | Module datatype | Extra InOut hint |
+|---|---|---:|---|---|---|
+| Drive | `FnBlk.cm.Drv` | — | FnBlk.cm.Drv | `Udt.cm.Drv` | |
+| Valve | `FnBlk.cm.Vlv` | — | FnBlk.cm.Vlv | `Udt.cm.Vlv` | `Vlv` |
+| DigitalInput | `FnBlk.cm.DI` | — | FnBlk.cm.DI | `Udt.cm.DI` | `Lim` |
+| AnalogueInput | `FnBlk.cm.AI` | — | FnBlk.cm.AI | `Udt.cm.AI` | |
+| AnalogueOutput | `FnBlk.cm.AO` | — | FnBlk.cm.AO | `Udt.cm.AO` | `AOut` |
+| DigitalOutput | `FnBlk.cm.DO` | — | FnBlk.cm.DO | `Udt.cm.DO` | `Ctrl` |
+| Speed | `FnBlk.cm.Spd` | — | FnBlk.cm.Spd | `Udt.cm.Spd` | `Spd` |
+
+A changed drive FC number produces `CM113_FUNCTION_NUMBER_MISMATCH` but the name-matched call evidence is retained. Classic entries have no expected number (A-Mill's `FnBlk.cm.Drv` is FC50, the number TIA expects for `cm.DrvType0`). Unknown names that look like processing FCs (`cm.*Type*`, `FnBlk.cm.*`) raise `CM109`.
+
+The Drive ILK/CR polarity rules (`DRV_ILK_ACTIVE_HIGH_PERMISSIVE`, `DRV_CR_ACTIVE_HIGH_ENABLE`) apply only to catalogue entries flagged `DriveSemanticsConfirmed`, which currently means the four `cm.DrvType*` FCs. `FnBlk.cm.Drv` gates CR differently (only for DrvType 1, bypassed by `CmdMAN`), so constant Classic ILK/CR values stay in manual review until Classic rules are confirmed.
 
 ## InOut selection and correlation
 

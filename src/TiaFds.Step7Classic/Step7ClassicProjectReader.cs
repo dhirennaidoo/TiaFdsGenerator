@@ -27,6 +27,12 @@ namespace TiaFds.Step7Classic
         // inventory. Throws Step7ProgramNotFoundException when plcName matches no program.
         public Step7ClassicReadResult Read(string inputPath, string plcName, bool includeDataBlockStructures)
         {
+            return Read(inputPath, plcName, includeDataBlockStructures, false);
+        }
+
+        public Step7ClassicReadResult Read(
+            string inputPath, string plcName, bool includeDataBlockStructures, bool includeBlockCalls)
+        {
             using (Step7LibraryProjectLoader loader = Step7LibraryProjectLoader.Open(inputPath))
             {
                 var mapper = new Step7InventoryMapper();
@@ -38,7 +44,7 @@ namespace TiaFds.Step7Classic
                 if (program == null)
                     throw new Step7ProgramNotFoundException(plcName, Step7ProgramSelector.Describe(loader.Model.Programs));
 
-                Step7ProgramModel model = loader.LoadProgram(program, includeDataBlockStructures);
+                Step7ProgramModel model = loader.LoadProgram(program, includeDataBlockStructures, includeBlockCalls);
                 return new Step7ClassicReadResult(summary, program, mapper.MapInventory(model));
             }
         }

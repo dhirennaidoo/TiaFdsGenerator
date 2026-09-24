@@ -43,9 +43,7 @@ namespace TiaFds.Analysis
                     ControlModuleFunctionCatalogue.FindByFunctionName(call.CalledBlockName);
                 if (definition == null)
                 {
-                    if (!string.IsNullOrWhiteSpace(call.CalledBlockName) &&
-                        call.CalledBlockName.StartsWith("cm.", StringComparison.OrdinalIgnoreCase) &&
-                        call.CalledBlockName.IndexOf("Type", StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (ControlModuleFunctionCatalogue.LooksLikeProcessingFunction(call.CalledBlockName))
                         diagnostics.Add(Diagnostic("Warning", "CM109_UNRECOGNISED_CONTROL_MODULE_FC",
                             CallSource(call), "No catalogue definition exists for '" + call.CalledBlockName + "'."));
                     continue;

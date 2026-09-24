@@ -54,7 +54,7 @@ namespace TiaFds.Step7.Extract.Cli
         private static int Run(Step7ExtractOptions options)
         {
             Step7ClassicReadResult result = new Step7ClassicProjectReader().Read(
-                options.Input, options.PlcName, options.IncludeDataBlockStructures);
+                options.Input, options.PlcName, options.IncludeDataBlockStructures, options.IncludeBlockCalls);
             TiaProjectSummary summary = result.Summary;
             Console.WriteLine("Project name: {0}", summary.Name);
             Console.WriteLine("Project path: {0}", summary.Path);

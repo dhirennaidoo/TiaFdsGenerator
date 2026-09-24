@@ -62,7 +62,7 @@ namespace TiaFds.Step7Classic
         {
             if (program == null) throw new ArgumentNullException(nameof(program));
 
-            var symbols = new SymbolLookup(program.Symbols);
+            var symbols = new Step7SymbolLookup(program.Symbols);
             var builder = new PlcInventoryBuilder(program.Identity.Name);
 
             foreach (Step7LoadDiagnostic diagnostic in program.Diagnostics)
@@ -74,20 +74,35 @@ namespace TiaFds.Step7Classic
 
             builder.AddTagTable(new PlcTagTableInfo(SymbolTableName, string.Empty, program.Symbols.Count));
 
+            // Structures are always mapped when decoded, because call extraction resolves
+            // pointers against them; they are only emitted when requested.
+            var structures = new List<DataBlockStructureInfo>();
+            var reportedUdts = new HashSet<int>();
+            foreach (Step7DataBlockModel dataBlock in program.DataBlocks)
+                structures.Add(MapDataBlock(dataBlock, symbols, reportedUdts, builder));
+
             if (program.DataBlocksIncluded)
             {
                 builder.MarkDataBlockStructuresIncluded();
-                var reportedUdts = new HashSet<int>();
-                foreach (Step7DataBlockModel dataBlock in program.DataBlocks)
-                    builder.AddDataBlockStructure(MapDataBlock(dataBlock, symbols, reportedUdts, builder));
+                foreach (DataBlockStructureInfo structure in structures) builder.AddDataBlockStructure(structure);
+            }
+
+            if (program.CodeBlocksIncluded)
+            {
+                builder.MarkBlockCallsIncluded();
+                var diagnostics = new List<InventoryDiagnostic>();
+                foreach (BlockCallInfo call in new Step7BlockCallMapper().Map(
+                             program, symbols, new Step7AddressResolver(structures), diagnostics))
+                    builder.AddBlockCall(call);
+                foreach (InventoryDiagnostic diagnostic in diagnostics) builder.AddDiagnostic(diagnostic);
             }
 
             return builder.Build();
         }
 
-        private static void AddBlock(Step7BlockModel block, SymbolLookup symbols, PlcInventoryBuilder builder)
+        private static void AddBlock(Step7BlockModel block, Step7SymbolLookup symbols, PlcInventoryBuilder builder)
         {
-            string name = block.SymbolName ?? symbols.NameOf(OperandPrefix(block.Kind), block.Number);
+            string name = block.SymbolName ?? symbols.NameOf(Step7BlockCallMapper.Prefix(block.Kind), block.Number);
             if (block.KnowHowProtected)
             {
                 builder.AddDiagnostic(new InventoryDiagnostic(
@@ -111,7 +126,7 @@ namespace TiaFds.Step7Classic
 
             builder.AddProgramBlock(new ProgramBlockInfo(
                 name,
-                BlockTypeName(block),
+                BlockTypeName(block.Kind, block.IsInstanceDataBlock),
                 block.Number,
                 LanguageName(block.Language),
                 BlocksGroupPath,
@@ -122,7 +137,7 @@ namespace TiaFds.Step7Classic
 
         private static DataBlockStructureInfo MapDataBlock(
             Step7DataBlockModel dataBlock,
-            SymbolLookup symbols,
+            Step7SymbolLookup symbols,
             ISet<int> reportedUdts,
             PlcInventoryBuilder builder)
         {
@@ -148,7 +163,7 @@ namespace TiaFds.Step7Classic
             Step7DataRowModel row,
             string parentPath,
             int nestingLevel,
-            SymbolLookup symbols,
+            Step7SymbolLookup symbols,
             ISet<int> reportedUdts,
             PlcInventoryBuilder builder)
         {
@@ -157,10 +172,22 @@ namespace TiaFds.Step7Classic
             foreach (Step7DataRowModel child in row.Children)
                 children.Add(MapRow(child, memberPath, nestingLevel + 1, symbols, reportedUdts, builder));
 
+            if (string.Equals(row.ElementaryType, "UDT", StringComparison.OrdinalIgnoreCase) &&
+                row.UserDataTypeNumber.HasValue &&
+                symbols.SymbolOf("UDT", row.UserDataTypeNumber.Value) == null &&
+                reportedUdts.Add(row.UserDataTypeNumber.Value))
+            {
+                builder.AddDiagnostic(new InventoryDiagnostic(
+                    "Warning",
+                    Step7DiagnosticCodes.UserDataTypeSymbolNotFound,
+                    "UDT" + row.UserDataTypeNumber.Value.ToString(CultureInfo.InvariantCulture),
+                    "UDT has no symbol; members of this type cannot be recognised as control modules."));
+            }
+
             return new DataBlockMemberInfo(
                 row.Name,
                 memberPath,
-                DataTypeName(row, symbols, reportedUdts, builder),
+                symbols.TypeName(row.ElementaryType, row.UserDataTypeNumber),
                 row.Comment,
                 nestingLevel,
                 row.IsArray,
@@ -170,43 +197,15 @@ namespace TiaFds.Step7Classic
                 children);
         }
 
-        private static string DataTypeName(
-            Step7DataRowModel row,
-            SymbolLookup symbols,
-            ISet<int> reportedUdts,
-            PlcInventoryBuilder builder)
+        internal static string BlockTypeName(Step7BlockKind kind, bool isInstanceDataBlock)
         {
-            if (string.Equals(row.ElementaryType, "UDT", StringComparison.OrdinalIgnoreCase) &&
-                row.UserDataTypeNumber.HasValue)
-            {
-                int number = row.UserDataTypeNumber.Value;
-                string symbol = symbols.SymbolOf("UDT", number);
-                if (symbol != null) return symbol;
-                if (reportedUdts.Add(number))
-                {
-                    builder.AddDiagnostic(new InventoryDiagnostic(
-                        "Warning",
-                        Step7DiagnosticCodes.UserDataTypeSymbolNotFound,
-                        "UDT" + number.ToString(CultureInfo.InvariantCulture),
-                        "UDT has no symbol; members of this type cannot be recognised as control modules."));
-                }
-                return "UDT" + number.ToString(CultureInfo.InvariantCulture);
-            }
-
-            if (string.Equals(row.ElementaryType, "STRUCT", StringComparison.OrdinalIgnoreCase))
-                return "Struct";
-            return row.ElementaryType;
-        }
-
-        private static string BlockTypeName(Step7BlockModel block)
-        {
-            switch (block.Kind)
+            switch (kind)
             {
                 case Step7BlockKind.OrganizationBlock: return "OrganizationBlock";
                 case Step7BlockKind.Function: return "Function";
                 case Step7BlockKind.FunctionBlock: return "FunctionBlock";
                 case Step7BlockKind.DataBlock:
-                    return block.IsInstanceDataBlock ? "InstanceDataBlock" : "GlobalDataBlock";
+                    return isInstanceDataBlock ? "InstanceDataBlock" : "GlobalDataBlock";
                 case Step7BlockKind.SystemFunction: return "SystemFunction";
                 case Step7BlockKind.SystemFunctionBlock: return "SystemFunctionBlock";
                 default: return "Other";
@@ -226,57 +225,6 @@ namespace TiaFds.Step7Classic
                 case "FFUP": return "F_FBD";
                 case "": return "Unknown";
                 default: return language;
-            }
-        }
-
-        private static string OperandPrefix(Step7BlockKind kind)
-        {
-            switch (kind)
-            {
-                case Step7BlockKind.OrganizationBlock: return "OB";
-                case Step7BlockKind.Function: return "FC";
-                case Step7BlockKind.FunctionBlock: return "FB";
-                case Step7BlockKind.DataBlock: return "DB";
-                case Step7BlockKind.UserDataType: return "UDT";
-                case Step7BlockKind.SystemFunction: return "SFC";
-                case Step7BlockKind.SystemFunctionBlock: return "SFB";
-                case Step7BlockKind.VariableTable: return "VAT";
-                default: return "BLK";
-            }
-        }
-
-        private sealed class SymbolLookup
-        {
-            private readonly Dictionary<string, string> byOperand =
-                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            public SymbolLookup(IEnumerable<Step7SymbolModel> symbols)
-            {
-                foreach (Step7SymbolModel symbol in symbols)
-                {
-                    string operand = Normalize(symbol.Operand);
-                    // STEP 7 rejects duplicate operands; keep the first defensively.
-                    if (operand.Length > 0 && symbol.Symbol.Length > 0 && !byOperand.ContainsKey(operand))
-                        byOperand.Add(operand, symbol.Symbol);
-                }
-            }
-
-            public string SymbolOf(string prefix, int number)
-            {
-                string symbol;
-                return byOperand.TryGetValue(prefix + number.ToString(CultureInfo.InvariantCulture), out symbol)
-                    ? symbol
-                    : null;
-            }
-
-            public string NameOf(string prefix, int number)
-            {
-                return SymbolOf(prefix, number) ?? prefix + number.ToString(CultureInfo.InvariantCulture);
-            }
-
-            private static string Normalize(string operand)
-            {
-                return (operand ?? string.Empty).Replace(" ", string.Empty).Trim();
             }
         }
     }

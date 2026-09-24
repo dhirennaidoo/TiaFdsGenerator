@@ -95,7 +95,8 @@ namespace TiaFds.Analysis
                 bool knownDriveVariant = false;
                 foreach (ControlModuleFunctionDefinition definition in
                     ControlModuleFunctionCatalogue.Definitions)
-                    if (string.Equals(definition.ModuleFamily, "Drive",
+                    if (definition.DriveSemanticsConfirmed &&
+                        string.Equals(definition.ModuleFamily, "Drive",
                             StringComparison.OrdinalIgnoreCase) &&
                         string.Equals(definition.VariantName, variant,
                             StringComparison.OrdinalIgnoreCase))

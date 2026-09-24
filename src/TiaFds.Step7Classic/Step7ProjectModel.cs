@@ -70,14 +70,34 @@ namespace TiaFds.Step7Classic
             IReadOnlyList<Step7DataBlockModel> dataBlocks,
             bool dataBlocksIncluded,
             IReadOnlyList<Step7LoadDiagnostic> diagnostics)
+            : this(identity, symbols, blocks, dataBlocks, dataBlocksIncluded, null, false, diagnostics)
+        {
+        }
+
+        public Step7ProgramModel(
+            Step7ProgramIdentity identity,
+            IReadOnlyList<Step7SymbolModel> symbols,
+            IReadOnlyList<Step7BlockModel> blocks,
+            IReadOnlyList<Step7DataBlockModel> dataBlocks,
+            bool dataBlocksIncluded,
+            IReadOnlyList<Step7CodeBlockModel> codeBlocks,
+            bool codeBlocksIncluded,
+            IReadOnlyList<Step7LoadDiagnostic> diagnostics)
         {
             Identity = identity ?? new Step7ProgramIdentity(null, null, null);
             Symbols = symbols ?? new Step7SymbolModel[0];
             Blocks = blocks ?? new Step7BlockModel[0];
             DataBlocks = dataBlocks ?? new Step7DataBlockModel[0];
             DataBlocksIncluded = dataBlocksIncluded;
+            CodeBlocks = codeBlocks ?? new Step7CodeBlockModel[0];
+            CodeBlocksIncluded = codeBlocksIncluded;
             Diagnostics = diagnostics ?? new Step7LoadDiagnostic[0];
         }
+
+        // Decoded OB/FC/FB (with networks) and SFC/SFB (interface only); empty unless block
+        // calls were requested.
+        public IReadOnlyList<Step7CodeBlockModel> CodeBlocks { get; }
+        public bool CodeBlocksIncluded { get; }
 
         public Step7ProgramIdentity Identity { get; }
         public IReadOnlyList<Step7SymbolModel> Symbols { get; }
@@ -197,6 +217,117 @@ namespace TiaFds.Step7Classic
         // STEP 7 bounds text, e.g. "1..10" or "1..4,0..2".
         public string ArrayBounds { get; }
         public IReadOnlyList<Step7DataRowModel> Children { get; }
+    }
+
+    // A decoded OB, FC, FB, SFC or SFB. System blocks only carry an interface.
+    public sealed class Step7CodeBlockModel
+    {
+        public Step7CodeBlockModel(
+            Step7BlockKind kind,
+            int number,
+            IReadOnlyList<Step7InterfaceParameterModel> interfaceParameters,
+            IReadOnlyList<Step7NetworkModel> networks,
+            string decodeError)
+        {
+            Kind = kind;
+            Number = number;
+            InterfaceParameters = interfaceParameters ?? new Step7InterfaceParameterModel[0];
+            Networks = networks ?? new Step7NetworkModel[0];
+            DecodeError = string.IsNullOrWhiteSpace(decodeError) ? null : decodeError;
+        }
+
+        public Step7BlockKind Kind { get; }
+        public int Number { get; }
+        // Formal parameters (IN, OUT, IN_OUT sections only).
+        public IReadOnlyList<Step7InterfaceParameterModel> InterfaceParameters { get; }
+        public IReadOnlyList<Step7NetworkModel> Networks { get; }
+        public string DecodeError { get; }
+    }
+
+    public sealed class Step7InterfaceParameterModel
+    {
+        public Step7InterfaceParameterModel(string section, string name, string elementaryType, int? userDataTypeNumber)
+        {
+            Section = section ?? string.Empty;
+            Name = name ?? string.Empty;
+            ElementaryType = elementaryType ?? string.Empty;
+            UserDataTypeNumber = userDataTypeNumber;
+        }
+
+        // IN, OUT or IN_OUT.
+        public string Section { get; }
+        public string Name { get; }
+        public string ElementaryType { get; }
+        public int? UserDataTypeNumber { get; }
+    }
+
+    public sealed class Step7NetworkModel
+    {
+        public Step7NetworkModel(int number, string title, string comment, IReadOnlyList<Step7StatementModel> statements)
+        {
+            Number = number;
+            Title = string.IsNullOrWhiteSpace(title) ? null : title.Trim();
+            Comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+            Statements = statements ?? new Step7StatementModel[0];
+        }
+
+        // 1-based position within the block.
+        public int Number { get; }
+        public string Title { get; }
+        public string Comment { get; }
+        public IReadOnlyList<Step7StatementModel> Statements { get; }
+    }
+
+    // One decompiled STL statement. Operands are kept in absolute form (e.g. "DB11.DBX 0.3",
+    // "M0.1"); resolution to symbols happens in the mappers against the DB layouts.
+    public sealed class Step7StatementModel
+    {
+        public Step7StatementModel(
+            string label,
+            string command,
+            string operand,
+            string operandSymbol,
+            string calledBlock,
+            string instanceDataBlock,
+            IReadOnlyList<Step7CallArgumentModel> callArguments)
+        {
+            Label = string.IsNullOrWhiteSpace(label) ? null : label.Trim();
+            Command = (command ?? string.Empty).Trim();
+            Operand = (operand ?? string.Empty).Trim();
+            OperandSymbol = string.IsNullOrWhiteSpace(operandSymbol) ? null : operandSymbol;
+            CalledBlock = string.IsNullOrWhiteSpace(calledBlock) ? null : calledBlock.Trim();
+            InstanceDataBlock = string.IsNullOrWhiteSpace(instanceDataBlock) ? null : instanceDataBlock.Trim();
+            CallArguments = callArguments ?? new Step7CallArgumentModel[0];
+        }
+
+        public string Label { get; }
+        public string Command { get; }
+        public string Operand { get; }
+        // Symbol-table name of the operand when it is a global symbol (e.g. "glb.One").
+        public string OperandSymbol { get; }
+        // Absolute called block for CALL/UC/CC, e.g. "FC50", "SFB14".
+        public string CalledBlock { get; }
+        // Instance DB of an FB/SFB call, e.g. "DI5005".
+        public string InstanceDataBlock { get; }
+        public IReadOnlyList<Step7CallArgumentModel> CallArguments { get; }
+    }
+
+    public sealed class Step7CallArgumentModel
+    {
+        public Step7CallArgumentModel(string name, string section, string elementaryType, string value)
+        {
+            Name = name ?? string.Empty;
+            Section = section ?? string.Empty;
+            ElementaryType = elementaryType ?? string.Empty;
+            Value = (value ?? string.Empty).Trim();
+        }
+
+        public string Name { get; }
+        // IN, OUT or IN_OUT as decoded at the call site.
+        public string Section { get; }
+        public string ElementaryType { get; }
+        // Actual parameter as decompiled, e.g. "P#DB50.DBX 400.0", "L 0.0", "M0.1".
+        public string Value { get; }
     }
 
     public sealed class Step7LoadDiagnostic

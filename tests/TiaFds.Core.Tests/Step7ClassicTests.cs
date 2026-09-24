@@ -186,7 +186,9 @@ namespace TiaFds.Core.Tests
 
             AssertInvalid("--input is required", "--plc", "P");
             AssertInvalid("require --plc", "--input", "A.s7p", "--export-json", "out.json");
-            AssertInvalid("not yet supported", "--input", "A.s7p", "--plc", "P", "--include-block-calls");
+            AssertInvalid("require --plc", "--input", "A.s7p", "--include-block-calls");
+            Assert.IsTrue(Step7ExtractOptions.Parse(new[] { "--input", "A.s7p", "--plc", "P", "--include-block-calls" })
+                .IncludeBlockCalls);
             AssertInvalid("require --export-json", "--input", "A.s7p", "--overwrite");
             AssertInvalid("only be specified once", "--input", "A.s7p", "--input", "B.s7p");
             AssertInvalid("Unknown argument", "--input", "A.s7p", "--bogus");
@@ -248,12 +250,20 @@ namespace TiaFds.Core.Tests
             Assert.IsTrue(structure.Summary.Plcs.Count > 0);
 
             Step7ClassicReadResult result = new Step7ClassicProjectReader().Read(
-                sample, FirstProgramPath(structure), true);
+                sample, FirstProgramPath(structure), true, true);
             Assert.IsTrue(result.SelectedPlcInventory.DataBlockStructuresIncluded);
+            Assert.IsTrue(result.SelectedPlcInventory.BlockCallsIncluded);
             EngineeringSnapshot snapshot = new EngineeringSnapshotFactory().Create(result.Summary, result.SelectedPlc,
                 result.SelectedPlcInventory, sample, false, FixedTime, SnapshotSourceKind.Step7Classic);
             ControlModuleDiscoveryResult discovery = new ControlModuleContainerAnalyzer().Analyze(snapshot);
             Assert.IsTrue(discovery.Modules.Any(module => module.ModuleFamily == "Drive"));
+
+            ControlModuleImplementationResult implementation = new ControlModuleCallAnalyzer().Analyze(snapshot, discovery);
+            Assert.IsTrue(implementation.Modules.Any(module =>
+                module.Declaration.ModuleFamily == "Drive" &&
+                module.Status == ControlModuleImplementationStatus.Correlated));
+            Assert.IsFalse(implementation.Diagnostics.Any(item => item.Code == "CM104_ACTUAL_PARAMETER_NOT_RESOLVED"),
+                "Every recognised module call in the sample should resolve its module pointer.");
         }
 
         private static string FirstProgramPath(Step7ClassicReadResult structure)

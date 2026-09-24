@@ -15,6 +15,7 @@ namespace TiaFds.Step7Classic
         public bool Overwrite { get; private set; }
         public bool IncludeSourcePath { get; private set; }
         public bool IncludeDataBlockStructures { get; private set; }
+        public bool IncludeBlockCalls { get; private set; }
 
         public static Step7ExtractOptions Parse(string[] args)
         {
@@ -33,8 +34,7 @@ namespace TiaFds.Step7Classic
                     case "--overwrite": result.Overwrite = true; continue;
                     case "--include-source-path": result.IncludeSourcePath = true; continue;
                     case "--include-db-structures": result.IncludeDataBlockStructures = true; continue;
-                    case "--include-block-calls":
-                        throw Invalid("--include-block-calls is not yet supported for STEP 7 Classic projects.");
+                    case "--include-block-calls": result.IncludeBlockCalls = true; continue;
                     case "--retrieve-to":
                         throw Invalid("--retrieve-to is not used for STEP 7 Classic; zipped projects are read in place.");
                     case "--input":
@@ -53,9 +53,10 @@ namespace TiaFds.Step7Classic
             }
 
             if (string.IsNullOrWhiteSpace(result.Input)) throw Invalid("--input is required.");
-            if ((result.Inventory || result.ExportJson != null || result.IncludeDataBlockStructures) &&
+            if ((result.Inventory || result.ExportJson != null || result.IncludeDataBlockStructures ||
+                 result.IncludeBlockCalls) &&
                 string.IsNullOrWhiteSpace(result.PlcName))
-                throw Invalid("--inventory, --include-db-structures, and --export-json require --plc <name>.");
+                throw Invalid("--inventory, --include-db-structures, --include-block-calls, and --export-json require --plc <name>.");
             if ((result.Overwrite || result.IncludeSourcePath) && result.ExportJson == null)
                 throw Invalid("--overwrite and --include-source-path require --export-json <path>.");
             return result;
@@ -64,7 +65,7 @@ namespace TiaFds.Step7Classic
         public static string Usage()
         {
             return "Usage: TiaFds.Step7.Extract.Cli.exe --input <project.s7p|project.zip> [--plc <program|CPU|Station/CPU/Program>] " +
-                   "[--inventory] [--verbose] [--include-db-structures] [--export-json <path>] [--overwrite] [--include-source-path]";
+                   "[--inventory] [--verbose] [--include-db-structures] [--include-block-calls] [--export-json <path>] [--overwrite] [--include-source-path]";
         }
 
         private static ArgumentException Invalid(string message)

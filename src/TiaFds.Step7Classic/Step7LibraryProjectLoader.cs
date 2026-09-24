@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using DotNetSiemensPLCToolBoxLibrary.DataTypes;
+using DotNetSiemensPLCToolBoxLibrary.DataTypes.AWL.Step7V5;
 using DotNetSiemensPLCToolBoxLibrary.DataTypes.Blocks;
 using DotNetSiemensPLCToolBoxLibrary.DataTypes.Blocks.Step7V5;
 using DotNetSiemensPLCToolBoxLibrary.DataTypes.Projectfolders;
@@ -67,6 +68,14 @@ namespace TiaFds.Step7Classic
 
         public Step7ProgramModel LoadProgram(Step7ProgramIdentity identity, bool includeDataBlocks)
         {
+            return LoadProgram(identity, includeDataBlocks, false);
+        }
+
+        // includeDataBlocks controls whether DB structures are emitted; includeCodeBlocks
+        // decodes networks for call extraction and also decodes DB layouts, because call
+        // pointers (P#DB50.DBX 400.0) can only be resolved against them.
+        public Step7ProgramModel LoadProgram(Step7ProgramIdentity identity, bool includeDataBlocks, bool includeCodeBlocks)
+        {
             if (identity == null) throw new ArgumentNullException(nameof(identity));
             ProgramEntry entry = programs.FirstOrDefault(item => ReferenceEquals(item.Identity, identity));
             if (entry == null) throw new ArgumentException("The program does not belong to this project.", nameof(identity));
@@ -77,6 +86,8 @@ namespace TiaFds.Step7Classic
 
             var blocks = new List<Step7BlockModel>();
             var dataBlocks = new List<Step7DataBlockModel>();
+            var codeBlocks = new List<Step7CodeBlockModel>();
+            bool keepDataBlocks = includeDataBlocks || includeCodeBlocks;
             BlocksOfflineFolder blockFolder = entry.Folder.BlocksOfflineFolder;
             List<ProjectBlockInfo> blockInfos = null;
             if (blockFolder == null)
@@ -113,7 +124,11 @@ namespace TiaFds.Step7Classic
                     // from its header. Only global DB structures are kept, as for TIA.
                     DecodedDataBlock decoded = DecodeDataBlock(blockFolder, plcInfo);
                     isInstance = decoded.IsInstance;
-                    if (includeDataBlocks && !isInstance) dataBlocks.Add(decoded.Model);
+                    if (keepDataBlocks && !isInstance) dataBlocks.Add(decoded.Model);
+                }
+                else if (includeCodeBlocks && IsCodeBlock(kind))
+                {
+                    codeBlocks.Add(DecodeCodeBlock(blockFolder, plcInfo, kind));
                 }
 
                 blocks.Add(new Step7BlockModel(
@@ -125,7 +140,110 @@ namespace TiaFds.Step7Classic
                     s7Info != null && s7Info.KnowHowProtection));
             }
 
-            return new Step7ProgramModel(identity, symbols, blocks, dataBlocks, includeDataBlocks, diagnostics);
+            return new Step7ProgramModel(identity, symbols, blocks, dataBlocks, includeDataBlocks,
+                codeBlocks, includeCodeBlocks, diagnostics);
+        }
+
+        private static bool IsCodeBlock(Step7BlockKind kind)
+        {
+            return kind == Step7BlockKind.OrganizationBlock || kind == Step7BlockKind.Function ||
+                   kind == Step7BlockKind.FunctionBlock || kind == Step7BlockKind.SystemFunction ||
+                   kind == Step7BlockKind.SystemFunctionBlock;
+        }
+
+        private static Step7CodeBlockModel DecodeCodeBlock(
+            BlocksOfflineFolder folder, ProjectPlcBlockInfo info, Step7BlockKind kind)
+        {
+            try
+            {
+                var block = folder.GetBlock(info, ConvertingOptions()) as S7FunctionBlock;
+                if (block == null)
+                    return new Step7CodeBlockModel(kind, info.BlockNumber, null, null,
+                        "The block did not decode as a code block.");
+
+                var parameters = ReadInterface(block.Parameter);
+                // System blocks in the offline folder are interface stubs; their code is not used.
+                bool keepNetworks = kind != Step7BlockKind.SystemFunction && kind != Step7BlockKind.SystemFunctionBlock;
+                var networks = new List<Step7NetworkModel>();
+                if (keepNetworks && block.Networks != null)
+                {
+                    var number = 0;
+                    foreach (Network network in block.Networks)
+                        networks.Add(ReadNetwork(network, ++number));
+                }
+                return new Step7CodeBlockModel(kind, info.BlockNumber, parameters, networks, null);
+            }
+            catch (Exception exception)
+            {
+                return new Step7CodeBlockModel(kind, info.BlockNumber, null, null, exception.Message);
+            }
+        }
+
+        private static S7ConvertingOptions ConvertingOptions()
+        {
+            // Symbol replacement only affects rendering; operands are read in absolute form
+            // (Parameter) and resolved against the DB layouts by the mappers.
+            return new S7ConvertingOptions(MnemonicLanguage.English)
+            {
+                UseComments = true,
+                CombineDBOpenAndDBAccess = true,
+                ReplaceDBAccessesWithSymbolNames = true,
+                ReplaceLokalDataAddressesWithSymbolNames = true,
+                ReplaceDIAccessesWithSymbolNames = true,
+                GenerateCallsfromUCs = true
+            };
+        }
+
+        private static List<Step7InterfaceParameterModel> ReadInterface(S7DataRow root)
+        {
+            var parameters = new List<Step7InterfaceParameterModel>();
+            if (root == null) return parameters;
+            foreach (object sectionObject in root.Children)
+            {
+                var section = sectionObject as S7DataRow;
+                if (section == null) continue;
+                string sectionName = (section.Name ?? string.Empty).ToUpperInvariant();
+                if (sectionName == "RETURN") sectionName = "OUT";
+                if (sectionName != "IN" && sectionName != "OUT" && sectionName != "IN_OUT") continue;
+                foreach (object parameterObject in section.Children)
+                {
+                    var parameter = parameterObject as S7DataRow;
+                    if (parameter == null) continue;
+                    parameters.Add(new Step7InterfaceParameterModel(
+                        sectionName,
+                        parameter.Name,
+                        parameter.DataType.ToString(),
+                        parameter.DataType == S7DataRowType.UDT ? parameter.DataTypeBlockNumber : (int?)null));
+                }
+            }
+            return parameters;
+        }
+
+        private static Step7NetworkModel ReadNetwork(Network network, int number)
+        {
+            var statements = new List<Step7StatementModel>();
+            foreach (object rowObject in network.AWLCode)
+            {
+                var row = rowObject as S7FunctionBlockRow;
+                if (row == null) continue;
+                var arguments = new List<Step7CallArgumentModel>();
+                if (row.CallParameter != null)
+                    foreach (S7FunctionBlockParameter parameter in row.CallParameter)
+                        arguments.Add(new Step7CallArgumentModel(
+                            parameter.Name,
+                            parameter.ParameterType.ToString(),
+                            parameter.ParameterDataType.ToString(),
+                            parameter.Value));
+                statements.Add(new Step7StatementModel(
+                    row.Label,
+                    row.Command,
+                    row.Parameter,
+                    row.SymbolTableEntry == null ? null : row.SymbolTableEntry.Symbol,
+                    row.CalledBlock,
+                    row.DiName,
+                    arguments));
+            }
+            return new Step7NetworkModel(number, network.Name, network.Comment, statements);
         }
 
         public void Dispose()
