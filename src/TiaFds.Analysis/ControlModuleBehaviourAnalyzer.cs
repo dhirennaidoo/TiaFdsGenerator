@@ -9,9 +9,11 @@ namespace TiaFds.Analysis
     public sealed class ControlModuleBehaviourAnalyzer
     {
         private const int MaximumTraceDepth = 16;
+        // CmdSA is the STEP 7 Classic library's start command (set/reset by the sequences).
         private static readonly Regex MemberPattern = new Regex(
-            "^(SA|CR|ILK)(?:\\[(\\d+)\\]|(\\d+))?$",
+            "^(SA|CR|ILK|CmdSA)(?:\\[(\\d+)\\]|(\\d+))?$",
             RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+        public const string LatchConstantRule = "LATCH_CONSTANT_REQUIRES_REVIEW";
         private readonly BooleanConstantCatalogue constantCatalogue;
         private readonly IBehaviourConditionSemantics semantics;
 
@@ -74,12 +76,20 @@ namespace TiaFds.Analysis
                 behavioural.Add(new AssignmentContext(assignment, module, kind, member, index));
             }
 
+            // Several coil (=) writes to one member overwrite each other and are ambiguous.
+            // Set/Reset writes to a latch are expected to be several (one per sequence step)
+            // and combine; mixing coil and latch writes to the same member is ambiguous.
             var duplicateCounts = behavioural
                 .Where(item => !string.IsNullOrWhiteSpace(
                     item.Assignment.ResolvedDestinationPath))
                 .GroupBy(item => item.Assignment.ResolvedDestinationPath,
                     StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.Count(),
+                .ToDictionary(group => group.Key, group =>
+                    {
+                        int coils = group.Count(item => item.Assignment.Operation == ExtractedLogicOperation.Assign);
+                        int latches = group.Count() - coils;
+                        return coils > 1 || (coils > 0 && latches > 0) ? group.Count() : 1;
+                    },
                     StringComparer.OrdinalIgnoreCase);
 
             foreach (AssignmentContext item in behavioural)
@@ -184,6 +194,14 @@ namespace TiaFds.Analysis
                         module == null ? null : module.ModuleFamily,
                         variants, item.Kind, item.Member, effect,
                         simplification.EffectiveValue);
+                // A constant set or reset condition does not make the latch itself constant
+                // (the opposite write may still be dynamic), so it always needs review.
+                if (assignment.Operation != ExtractedLogicOperation.Assign &&
+                    effect != BehaviourConditionEffect.Dynamic &&
+                    simplification.EffectiveValue.HasValue)
+                    interpretation = new BehaviourSemanticInterpretation(
+                        BehaviourReviewClassification.RequiresManualInterpretation,
+                        LatchConstantRule, true);
                 IReadOnlyList<BehaviourConstantFinding> findings = BuildFindings(
                     item, simplification, effect, interpretation);
 
@@ -207,7 +225,7 @@ namespace TiaFds.Analysis
                     simplification.SimplifiedExpression,
                     simplification.EffectiveValue, simplificationStatus, effect,
                     interpretation.Classification,
-                    interpretation.RuleIdentifier, findings));
+                    interpretation.RuleIdentifier, findings, assignment.Operation));
 
                 if (problemCode != null)
                     AddProblem(problemCode, problemMessage, assignment, module,
@@ -614,7 +632,8 @@ namespace TiaFds.Analysis
             Match match = MemberPattern.Match(member ?? string.Empty);
             if (!match.Success) return false;
             string category = match.Groups[1].Value;
-            kind = string.Equals(category, "SA", StringComparison.OrdinalIgnoreCase)
+            kind = string.Equals(category, "SA", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(category, "CmdSA", StringComparison.OrdinalIgnoreCase)
                 ? BehaviouralConditionKind.StartCommand
                 : string.Equals(category, "CR", StringComparison.OrdinalIgnoreCase)
                     ? BehaviouralConditionKind.ControlRequest

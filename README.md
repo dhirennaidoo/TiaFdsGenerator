@@ -76,7 +76,7 @@ TiaFds.Cli.exe ^
 
 Output paths are explicit; parent directories are created and existing files are overwritten. The CLI prints each successfully generated absolute path. A write failure names the affected path and returns exit code `7`.
 
-The JSON reporting schema is `1.2`. The workbook contains these worksheets in order: `Summary`, `Modules`, `Processing Calls`, `Behavioural Conditions`, `Diagnostics`, and `Manual Review`. It uses filterable tables and preserves project text as text so formula-like engineering values are not evaluated by Excel.
+The JSON reporting schema is `1.3`. The workbook contains these worksheets in order: `Summary`, `Modules`, `Processing Calls`, `Behavioural Conditions`, `Diagnostics`, and `Manual Review`. It uses filterable tables and preserves project text as text so formula-like engineering values are not evaluated by Excel.
 
 ## Prerequisites and Siemens reference
 
@@ -109,8 +109,10 @@ dotnet test .\tests\TiaFds.Core.Tests\TiaFds.Core.Tests.csproj --no-build -p:Pla
 
 Application version and schema version are independent. Schema `1.4` adds
 `project.sourceKind` (`TiaPortal` or `Step7Classic`) and an optional
-byte.bit `address` on data-block members (STEP 7 Classic only). Snapshots
-without `sourceKind` are TIA Portal exports. Readers remain compatible with
+byte.bit `address` on data-block members (STEP 7 Classic only), plus an
+`operation` on logic assignments (`Assign` for `=`, `Set` for `S`, `Reset`
+for `R`). Snapshots without `sourceKind` are TIA Portal exports; assignments
+without `operation` are coil assignments. Readers remain compatible with
 schemas `1.0` through `1.3`.
 
 Schema `1.3` extends the `1.2` block-call contract with neutral PLC logic
@@ -145,11 +147,21 @@ assignment. Partial, unsupported, unresolved, and ambiguous conditions are
 retained with `BEH...` diagnostics and manual-review entries. No condition is
 inferred from a network title.
 
-`AnalysisReport.json` schema `1.2` includes `behaviourSummary`,
+`AnalysisReport.json` schema `1.3` includes `behaviourSummary`,
 `behaviouralConditions`, module-level `startCommands`, `controlRequests`, and
 `interlocks`. Schema 1.2 preserves both original and simplified expression
 trees and adds constant provenance, effective value, condition effect, semantic
-classification, and structured findings.
+classification, and structured findings. Schema 1.3 adds each condition's
+`operation` (`Assign`, `Set`, `Reset`); Excel appends it as the last
+`Behavioural Conditions` column so existing column positions are unchanged.
+
+Start commands are `SA` coils (TIA library) or `CmdSA` set/reset latches
+(STEP 7 Classic library, written by the sequence FCs). Several `S`/`R` writes
+to one latch are expected and each becomes its own condition; several coil
+(`=`) writes, or coil writes mixed with latch writes, remain
+`BEH104_MULTIPLE_ASSIGNMENTS`. A constant set or reset condition does not make
+the latch constant, so it is classified `RequiresManualInterpretation` with
+rule `LATCH_CONSTANT_REQUIRES_REVIEW`.
 
 The immutable default boolean catalogue recognizes literal `TRUE`/`FALSE` and
 the exact project symbols `glb.One`/`glb.Zero` (including quoted qualified
@@ -259,8 +271,29 @@ Call records follow the TIA conventions (directions `Input`/`Output`/`InOut`,
 raised only for FC/SFC calls: unassigned FB/SFB parameters are optional
 because they live in the instance DB.
 
-Logic assignments (SA/CR/ILK, CmdSA set/reset) are not extracted yet, so
-Classic reports contain no behavioural conditions.
+### Classic logic (STL evaluation)
+
+The same decompiled networks provide the boolean logic. The STL is evaluated
+as the CPU evaluates the logic string (RLO, first check, standalone `O`, the
+bracket stack), so LAD, FBD and STL blocks are handled alike:
+
+- `A`/`AN`/`O`/`ON`, `A(`…`)`, standalone `O` (AND before OR), `NOT`, `SET`, `CLR`
+- `=`, `S` and `R` are extracted with their operation; timer and counter `S`/`R` are not boolean writes
+- comparisons become operands such as `"db.seq".SeqFeed.StepNo == 110`; a comparison of one resolved member with a literal resolves to that member
+- LAD's anonymous local bits (`= L 0.0` … `A L 0.0`) are substituted within the network; they are not emitted
+- InOut/UDT parameter access through the compiler's pointer preamble (`L P##Seq` … `LAR1` … `A [AR1,P#0.0]`) is rendered as `#Seq.SG`
+- a timer, counter or call inside a bracket starts a new logic string at that bracket level only
+- forward jumps that skip only non-boolean code (the EN/ENO pattern of MOVE boxes) are followed
+
+Interface references are bound to the caller when a block has exactly one call
+site: `#Seq.SG` in `Seq RollerMills` becomes `"db.seq".SeqRollerMills.SG`
+because its only call passes `Seq := P#DB200.DBX 180.0`. With several callers
+the references stay unbound (Partial), because the actual depends on the
+caller.
+
+Jumps over boolean writes, backward or cross-network jumps, `BEC`, MCR, XOR,
+edge instructions (`FP`/`FN`) and status-word operands (`A BR`) produce an
+`Unknown` source with the reason, never a guessed expression.
 
 ## TIA extraction
 

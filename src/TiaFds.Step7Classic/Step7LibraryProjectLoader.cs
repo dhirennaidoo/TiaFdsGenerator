@@ -204,7 +204,8 @@ namespace TiaFds.Step7Classic
                 if (section == null) continue;
                 string sectionName = (section.Name ?? string.Empty).ToUpperInvariant();
                 if (sectionName == "RETURN") sectionName = "OUT";
-                if (sectionName != "IN" && sectionName != "OUT" && sectionName != "IN_OUT") continue;
+                if (sectionName != "IN" && sectionName != "OUT" && sectionName != "IN_OUT" && sectionName != "TEMP")
+                    continue;
                 foreach (object parameterObject in section.Children)
                 {
                     var parameter = parameterObject as S7DataRow;
@@ -213,10 +214,46 @@ namespace TiaFds.Step7Classic
                         sectionName,
                         parameter.Name,
                         parameter.DataType.ToString(),
-                        parameter.DataType == S7DataRowType.UDT ? parameter.DataTypeBlockNumber : (int?)null));
+                        parameter.DataType == S7DataRowType.UDT ? parameter.DataTypeBlockNumber : (int?)null,
+                        ReadMembers(parameter)));
                 }
             }
             return parameters;
+        }
+
+        // Member offsets inside an interface UDT are reported inconsistently by the library:
+        // IN_OUT members are relative to the UDT (Drv.MO @0.0 while Drv is @34.0), IN members
+        // are absolute (glbFlags.EStop @2.0 with glbFlags @2.0). Normalise to relative.
+        private static List<Step7InterfaceMemberModel> ReadMembers(S7DataRow parameter)
+        {
+            var members = new List<Step7InterfaceMemberModel>();
+            if (parameter.Children == null || parameter.Children.Count == 0) return members;
+            int baseByte = 0, baseBit = 0;
+            var first = parameter.Children[0] as S7DataRow;
+            if (first != null && first.BlockAddress != null && parameter.BlockAddress != null &&
+                first.BlockAddress.ByteAddress == parameter.BlockAddress.ByteAddress &&
+                first.BlockAddress.BitAddress == parameter.BlockAddress.BitAddress)
+            {
+                baseByte = parameter.BlockAddress.ByteAddress;
+                baseBit = parameter.BlockAddress.BitAddress;
+            }
+            FlattenMembers(parameter, null, baseByte * 8 + baseBit, members);
+            return members;
+        }
+
+        private static void FlattenMembers(S7DataRow row, string prefix, int baseBitOffset, List<Step7InterfaceMemberModel> target)
+        {
+            foreach (object childObject in row.Children)
+            {
+                var child = childObject as S7DataRow;
+                if (child == null || child.BlockAddress == null) continue;
+                string path = prefix == null ? child.Name : prefix + "." + child.Name;
+                int bitOffset = child.BlockAddress.ByteAddress * 8 + child.BlockAddress.BitAddress - baseBitOffset;
+                if (bitOffset < 0) continue;
+                target.Add(new Step7InterfaceMemberModel(path, child.DataType.ToString(), bitOffset / 8, bitOffset % 8));
+                if (child.Children != null && child.Children.Count > 0 && !child.IsArray)
+                    FlattenMembers(child, path, baseBitOffset, target);
+            }
         }
 
         private static Step7NetworkModel ReadNetwork(Network network, int number)

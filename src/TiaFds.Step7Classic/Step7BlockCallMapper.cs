@@ -96,6 +96,7 @@ namespace TiaFds.Step7Classic
                 Step7InterfaceParameterModel formal = called == null
                     ? null
                     : called.InterfaceParameters.FirstOrDefault(item =>
+                        IsFormal(item) &&
                         string.Equals(item.Name, argument.Name, StringComparison.OrdinalIgnoreCase));
                 string direction = Direction(formal == null ? argument.Section : formal.Section);
                 string formalType = formal != null
@@ -129,7 +130,7 @@ namespace TiaFds.Step7Classic
                 parameters.Add(new CallParameterInfo(argument.Name, direction, formalType, actual, resolved));
             }
 
-            if (parameters.Count == 0 && called != null && called.InterfaceParameters.Count > 0)
+            if (parameters.Count == 0 && called != null && called.InterfaceParameters.Any(IsFormal))
                 callDiagnostics.Add(new InventoryDiagnostic("Warning", "CM115_CALL_WITHOUT_PARAMETER_ASSIGNMENTS", source,
                     "The call has no parameter assignments although '" + calledName + "' declares parameters."));
 
@@ -156,6 +157,11 @@ namespace TiaFds.Step7Classic
                 diagnostics.Add(new InventoryDiagnostic("Warning", "CM121_RESOLVED_PATH_NOT_IN_DB_STRUCTURES", source,
                     "Connected symbol '" + normalized.NormalizedPath + "' is not present in the extracted DB structures."));
             return null;
+        }
+
+        private static bool IsFormal(Step7InterfaceParameterModel parameter)
+        {
+            return !string.Equals(parameter.Section, "TEMP", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string Direction(string section)

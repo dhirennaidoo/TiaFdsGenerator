@@ -89,12 +89,29 @@ namespace TiaFds.Step7Classic
 
             if (program.CodeBlocksIncluded)
             {
+                var addresses = new Step7AddressResolver(structures);
                 builder.MarkBlockCallsIncluded();
                 var diagnostics = new List<InventoryDiagnostic>();
-                foreach (BlockCallInfo call in new Step7BlockCallMapper().Map(
-                             program, symbols, new Step7AddressResolver(structures), diagnostics))
-                    builder.AddBlockCall(call);
+                IReadOnlyList<BlockCallInfo> calls = new Step7BlockCallMapper().Map(program, symbols, addresses, diagnostics);
+                foreach (BlockCallInfo call in calls) builder.AddBlockCall(call);
                 foreach (InventoryDiagnostic diagnostic in diagnostics) builder.AddDiagnostic(diagnostic);
+
+                // The same decompiled networks carry the boolean logic (=, S, R). Interface
+                // references are bound to the actual argument of a block's only call site.
+                builder.MarkLogicAssignmentsIncluded();
+                var parser = new Step7StlLogicParser(symbols, addresses);
+                var binder = new Step7ParameterBinder(calls, addresses);
+                foreach (Step7CodeBlockModel block in program.CodeBlocks)
+                {
+                    if (block.DecodeError != null || !IsProgramCode(block.Kind)) continue;
+                    Step7BlockModel listed = FindListed(program, block);
+                    foreach (ExtractedLogicAssignment assignment in parser.Parse(
+                                 block,
+                                 symbols.NameOf(Step7BlockCallMapper.Prefix(block.Kind), block.Number),
+                                 BlockTypeName(block.Kind, false),
+                                 LanguageName(listed == null ? null : listed.Language)))
+                        builder.AddLogicAssignment(binder.Bind(assignment));
+                }
             }
 
             return builder.Build();
@@ -195,6 +212,19 @@ namespace TiaFds.Step7Classic
                 row.ByteAddress.ToString(CultureInfo.InvariantCulture) + "." +
                 row.BitAddress.ToString(CultureInfo.InvariantCulture),
                 children);
+        }
+
+        private static bool IsProgramCode(Step7BlockKind kind)
+        {
+            return kind == Step7BlockKind.OrganizationBlock || kind == Step7BlockKind.Function ||
+                   kind == Step7BlockKind.FunctionBlock;
+        }
+
+        private static Step7BlockModel FindListed(Step7ProgramModel program, Step7CodeBlockModel block)
+        {
+            foreach (Step7BlockModel listed in program.Blocks)
+                if (listed.Kind == block.Kind && listed.Number == block.Number) return listed;
+            return null;
         }
 
         internal static string BlockTypeName(Step7BlockKind kind, bool isInstanceDataBlock)

@@ -237,7 +237,7 @@ namespace TiaFds.Reporting
                 "Is Permanently Disabled", "Requires Semantic Review", "Finding Count",
                 "Source Operands", "Resolved Operand Paths", "Block Number", "Block Name",
                 "Block Language", "Network Number", "Network Title", "Network Comment",
-                "Diagnostic Count"
+                "Diagnostic Count", "Operation"
             };
             Header(sheet, 1, headers);
             var row = 2;
@@ -283,6 +283,7 @@ namespace TiaFds.Reporting
                 Text(sheet.Cell(row, 27), condition.NetworkTitle);
                 Text(sheet.Cell(row, 28), condition.NetworkComment);
                 Number(sheet.Cell(row, 29), condition.DiagnosticCount);
+                Text(sheet.Cell(row, 30), condition.Operation.ToString());
                 row++;
             }
             FinishTable(sheet, row - 1, headers.Length, "BehaviouralConditionsTable",

@@ -247,18 +247,48 @@ namespace TiaFds.Step7Classic
     public sealed class Step7InterfaceParameterModel
     {
         public Step7InterfaceParameterModel(string section, string name, string elementaryType, int? userDataTypeNumber)
+            : this(section, name, elementaryType, userDataTypeNumber, null)
+        {
+        }
+
+        public Step7InterfaceParameterModel(
+            string section,
+            string name,
+            string elementaryType,
+            int? userDataTypeNumber,
+            IReadOnlyList<Step7InterfaceMemberModel> members)
         {
             Section = section ?? string.Empty;
             Name = name ?? string.Empty;
             ElementaryType = elementaryType ?? string.Empty;
             UserDataTypeNumber = userDataTypeNumber;
+            Members = members ?? new Step7InterfaceMemberModel[0];
         }
 
-        // IN, OUT or IN_OUT.
+        // IN, OUT, IN_OUT, or TEMP (temporaries are kept so named local bits can be rendered).
         public string Section { get; }
         public string Name { get; }
         public string ElementaryType { get; }
         public int? UserDataTypeNumber { get; }
+        // Flattened members of a UDT/STRUCT parameter, addressed relative to the parameter's start.
+        public IReadOnlyList<Step7InterfaceMemberModel> Members { get; }
+    }
+
+    public sealed class Step7InterfaceMemberModel
+    {
+        public Step7InterfaceMemberModel(string path, string elementaryType, int byteAddress, int bitAddress)
+        {
+            Path = path ?? string.Empty;
+            ElementaryType = elementaryType ?? string.Empty;
+            ByteAddress = byteAddress;
+            BitAddress = bitAddress;
+        }
+
+        // Relative member path, e.g. "SG" or "Status.Running".
+        public string Path { get; }
+        public string ElementaryType { get; }
+        public int ByteAddress { get; }
+        public int BitAddress { get; }
     }
 
     public sealed class Step7NetworkModel

@@ -232,7 +232,9 @@ namespace TiaFds.Reporting
                 (AnalysisBehaviourReviewClassification)Enum.Parse(
                     typeof(AnalysisBehaviourReviewClassification),
                     source.ReviewClassification.ToString(), false),
-                source.SemanticRule, findings.ToArray());
+                source.SemanticRule, findings.ToArray(),
+                (AnalysisLogicOperation)Enum.Parse(
+                    typeof(AnalysisLogicOperation), source.Operation.ToString(), false));
         }
 
         private static AnalysisBehaviourExpression CopyExpression(

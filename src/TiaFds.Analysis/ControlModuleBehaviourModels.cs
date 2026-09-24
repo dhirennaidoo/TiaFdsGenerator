@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TiaFds.Core;
 
 namespace TiaFds.Analysis
 {
@@ -229,7 +230,35 @@ namespace TiaFds.Analysis
             BehaviourConditionEffect effect,
             BehaviourReviewClassification reviewClassification,
             string semanticRule, IReadOnlyList<BehaviourConstantFinding> constantFindings)
+            : this(moduleFamily, moduleName, moduleMemberPath, kind, member, index,
+                destinationExpression, resolvedDestinationPath, originalExpression,
+                sourceExpression, sourceOperands, resolvedOperandPaths, description,
+                blockNumber, blockName, blockType, blockLanguage, networkNumber,
+                networkTitle, networkComment, statementOrder, resolutionStatus,
+                simplifiedExpression, effectiveConstantValue, simplificationStatus, effect,
+                reviewClassification, semanticRule, constantFindings,
+                ExtractedLogicOperation.Assign)
         {
+        }
+
+        public BehaviouralCondition(
+            string moduleFamily, string moduleName, string moduleMemberPath,
+            BehaviouralConditionKind kind, string member, int? index,
+            string destinationExpression, string resolvedDestinationPath,
+            BehaviourExpression originalExpression, string sourceExpression,
+            IReadOnlyList<string> sourceOperands, IReadOnlyList<string> resolvedOperandPaths,
+            string description, int? blockNumber, string blockName, string blockType,
+            string blockLanguage, int? networkNumber, string networkTitle,
+            string networkComment, int statementOrder,
+            BehaviouralConditionResolutionStatus resolutionStatus,
+            BehaviourExpression simplifiedExpression, bool? effectiveConstantValue,
+            BehaviourExpressionSimplificationStatus simplificationStatus,
+            BehaviourConditionEffect effect,
+            BehaviourReviewClassification reviewClassification,
+            string semanticRule, IReadOnlyList<BehaviourConstantFinding> constantFindings,
+            ExtractedLogicOperation operation)
+        {
+            Operation = operation;
             ModuleFamily = moduleFamily;
             ModuleName = moduleName;
             ModuleMemberPath = moduleMemberPath;
@@ -290,6 +319,10 @@ namespace TiaFds.Analysis
         public string NetworkComment { get; }
         public int StatementOrder { get; }
         public BehaviouralConditionResolutionStatus ResolutionStatus { get; }
+
+        // Assign for coils (=); Set/Reset for latch coils (S/R), e.g. a Classic CmdSA start
+        // that is set in one sequence step and reset in another.
+        public ExtractedLogicOperation Operation { get; }
 
         private static IReadOnlyList<string> Copy(IReadOnlyList<string> source)
         {

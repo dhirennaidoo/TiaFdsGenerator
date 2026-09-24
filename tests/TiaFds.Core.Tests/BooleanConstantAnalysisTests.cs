@@ -166,7 +166,7 @@ namespace TiaFds.Core.Tests
                 scenario.Snapshot, scenario.Discovery,
                 scenario.Implementation, scenario.Result);
 
-            Assert.AreEqual("1.2", report.SchemaVersion);
+            Assert.AreEqual("1.3", report.SchemaVersion);
             Assert.AreEqual(13, report.BehaviourSummary.TotalConditionCount);
             Assert.AreEqual(4, report.BehaviourSummary.PermanentlyTrueCount);
             Assert.AreEqual(5, report.BehaviourSummary.PermanentlyFalseCount);

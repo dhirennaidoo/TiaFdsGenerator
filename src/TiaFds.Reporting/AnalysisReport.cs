@@ -16,7 +16,7 @@ namespace TiaFds.Reporting
     [JsonObject(MemberSerialization.OptIn)]
     public sealed class AnalysisReport
     {
-        public const string CurrentSchemaVersion = "1.2";
+        public const string CurrentSchemaVersion = "1.3";
 
         public AnalysisReport(
             AnalysisProjectInfo project,
@@ -444,6 +444,13 @@ namespace TiaFds.Reporting
         public int ErrorCount { get; }
     }
 
+    public enum AnalysisLogicOperation
+    {
+        Assign,
+        Set,
+        Reset
+    }
+
     public enum AnalysisBehaviouralConditionKind
     {
         StartCommand,
@@ -670,7 +677,37 @@ namespace TiaFds.Reporting
             AnalysisBehaviourReviewClassification reviewClassification,
             string semanticRule,
             IReadOnlyList<AnalysisBehaviourConstantFinding> constantFindings)
+            : this(moduleFamily, moduleName, moduleMemberPath, kind, member, index,
+                destinationExpression, resolvedDestinationPath, originalExpression,
+                sourceExpression, sourceOperands, resolvedOperandPaths, description,
+                blockNumber, blockName, blockType, blockLanguage, networkNumber,
+                networkTitle, networkComment, statementOrder, resolutionStatus,
+                diagnosticCount, simplifiedExpression, effectiveConstantValue,
+                simplificationStatus, effect, reviewClassification, semanticRule,
+                constantFindings, AnalysisLogicOperation.Assign)
         {
+        }
+
+        public AnalysisBehaviouralCondition(
+            string moduleFamily, string moduleName, string moduleMemberPath,
+            AnalysisBehaviouralConditionKind kind, string member, int? index,
+            string destinationExpression, string resolvedDestinationPath,
+            AnalysisBehaviourExpression originalExpression, string sourceExpression,
+            IReadOnlyList<string> sourceOperands, IReadOnlyList<string> resolvedOperandPaths,
+            string description, int? blockNumber, string blockName, string blockType,
+            string blockLanguage, int? networkNumber, string networkTitle,
+            string networkComment, int statementOrder,
+            AnalysisBehaviouralResolutionStatus resolutionStatus, int diagnosticCount,
+            AnalysisBehaviourExpression simplifiedExpression,
+            bool? effectiveConstantValue,
+            AnalysisBehaviourExpressionSimplificationStatus simplificationStatus,
+            AnalysisBehaviourConditionEffect effect,
+            AnalysisBehaviourReviewClassification reviewClassification,
+            string semanticRule,
+            IReadOnlyList<AnalysisBehaviourConstantFinding> constantFindings,
+            AnalysisLogicOperation operation)
+        {
+            Operation = operation;
             ModuleFamily = moduleFamily;
             ModuleName = moduleName;
             ModuleMemberPath = moduleMemberPath;
@@ -743,6 +780,8 @@ namespace TiaFds.Reporting
         [JsonProperty("statementOrder")] public int StatementOrder { get; }
         [JsonProperty("resolutionStatus")] public AnalysisBehaviouralResolutionStatus ResolutionStatus { get; }
         [JsonProperty("diagnosticCount")] public int DiagnosticCount { get; }
+        // Assign (=), Set (S) or Reset (R). Report schema 1.3.
+        [JsonProperty("operation")] public AnalysisLogicOperation Operation { get; }
     }
 
     [JsonObject(MemberSerialization.OptIn)]

@@ -264,6 +264,18 @@ namespace TiaFds.Core.Tests
                 module.Status == ControlModuleImplementationStatus.Correlated));
             Assert.IsFalse(implementation.Diagnostics.Any(item => item.Code == "CM104_ACTUAL_PARAMETER_NOT_RESOLVED"),
                 "Every recognised module call in the sample should resolve its module pointer.");
+
+            Assert.IsTrue(result.SelectedPlcInventory.LogicAssignmentsIncluded);
+            ControlModuleBehaviourResult behaviour =
+                new ControlModuleBehaviourAnalyzer().Analyze(snapshot, discovery, implementation);
+            Assert.IsTrue(behaviour.Conditions.Any(item =>
+                item.Kind == BehaviouralConditionKind.Interlock &&
+                item.ResolutionStatus == BehaviouralConditionResolutionStatus.Complete));
+            Assert.IsTrue(behaviour.Conditions.Any(item =>
+                item.Kind == BehaviouralConditionKind.StartCommand &&
+                item.Operation == ExtractedLogicOperation.Set &&
+                item.ResolutionStatus == BehaviouralConditionResolutionStatus.Complete),
+                "Sequence start latches should resolve through the bound #Seq parameter.");
         }
 
         private static string FirstProgramPath(Step7ClassicReadResult structure)

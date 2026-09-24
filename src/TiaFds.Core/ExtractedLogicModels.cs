@@ -16,6 +16,15 @@ namespace TiaFds.Core
         Unknown
     }
 
+    // How the destination is written: "=" (coil/assign), "S" (set coil) or "R" (reset coil).
+    [JsonConverter(typeof(StringEnumConverter))]
+    public enum ExtractedLogicOperation
+    {
+        Assign,
+        Set,
+        Reset
+    }
+
     [JsonConverter(typeof(StringEnumConverter))]
     public enum ExtractedLogicResolutionStatus
     {
@@ -67,7 +76,6 @@ namespace TiaFds.Core
     [JsonObject(MemberSerialization.OptIn)]
     public sealed class ExtractedLogicAssignment
     {
-        [JsonConstructor]
         public ExtractedLogicAssignment(
             string destinationExpression,
             string resolvedDestinationPath,
@@ -82,7 +90,31 @@ namespace TiaFds.Core
             string networkComment,
             int statementOrder,
             ExtractedLogicResolutionStatus resolutionStatus)
+            : this(destinationExpression, resolvedDestinationPath, sourceExpression, originalSourceText,
+                blockName, blockNumber, blockType, blockLanguage, networkNumber, networkTitle,
+                networkComment, statementOrder, resolutionStatus, null)
         {
+        }
+
+        [JsonConstructor]
+        public ExtractedLogicAssignment(
+            string destinationExpression,
+            string resolvedDestinationPath,
+            ExtractedBooleanExpression sourceExpression,
+            string originalSourceText,
+            string blockName,
+            int? blockNumber,
+            string blockType,
+            string blockLanguage,
+            int? networkNumber,
+            string networkTitle,
+            string networkComment,
+            int statementOrder,
+            ExtractedLogicResolutionStatus resolutionStatus,
+            ExtractedLogicOperation? operation)
+        {
+            // Snapshots before schema 1.4 only contain coil assignments.
+            Operation = operation ?? ExtractedLogicOperation.Assign;
             DestinationExpression = destinationExpression;
             ResolvedDestinationPath = resolvedDestinationPath;
             SourceExpression = sourceExpression;
@@ -124,5 +156,8 @@ namespace TiaFds.Core
         public int StatementOrder { get; }
         [JsonProperty("resolutionStatus")]
         public ExtractedLogicResolutionStatus ResolutionStatus { get; }
+
+        [JsonProperty("operation")]
+        public ExtractedLogicOperation Operation { get; }
     }
 }

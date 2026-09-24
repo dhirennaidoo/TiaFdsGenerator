@@ -134,7 +134,7 @@ namespace TiaFds.Core.Tests
                 new AnalysisReportJsonWriter().Write(report, jsonPath);
                 new AnalysisReportExcelWriter().Write(report, excelPath);
                 JObject json = JObject.Parse(File.ReadAllText(jsonPath));
-                Assert.AreEqual("1.2", (string)json["schemaVersion"]);
+                Assert.AreEqual("1.3", (string)json["schemaVersion"]);
                 Assert.AreEqual(8, (int)json["behaviourSummary"]["totalConditionCount"]);
                 Assert.AreEqual("And",
                     (string)json["modules"][0]["interlocks"][0]["expression"]["kind"]);
