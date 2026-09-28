@@ -276,6 +276,13 @@ namespace TiaFds.Core.Tests
                 item.Operation == ExtractedLogicOperation.Set &&
                 item.ResolutionStatus == BehaviouralConditionResolutionStatus.Complete),
                 "Sequence start latches should resolve through the bound #Seq parameter.");
+
+            // A-Mill-style projects initialise drives with FnBlk.Setup.Drv; when present, every
+            // drive with a startup DrvType is classified by the Classic drive rules.
+            if (result.SelectedPlcInventory.StartupValues.Any())
+                Assert.IsTrue(behaviour.Conditions.Any(item =>
+                    item.SemanticRule == ControlModuleBehaviourAnalyzer.ClassicIlkRule ||
+                    item.SemanticRule == ControlModuleBehaviourAnalyzer.ClassicCrNotUsedRule));
         }
 
         private static string FirstProgramPath(Step7ClassicReadResult structure)

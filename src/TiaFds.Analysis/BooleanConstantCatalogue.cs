@@ -7,16 +7,27 @@ namespace TiaFds.Analysis
     public sealed class BooleanConstantMapping
     {
         public BooleanConstantMapping(string symbol, bool value, string ruleIdentifier)
+            : this(symbol, value, ruleIdentifier, false)
+        {
+        }
+
+        public BooleanConstantMapping(string symbol, bool value, string ruleIdentifier, bool isBypassFlag)
         {
             if (string.IsNullOrWhiteSpace(symbol))
                 throw new ArgumentException("A constant symbol is required.", nameof(symbol));
             Symbol = symbol;
             Value = value;
             RuleIdentifier = ruleIdentifier;
+            IsBypassFlag = isBypassFlag;
         }
         public string Symbol { get; }
         public bool Value { get; }
         public string RuleIdentifier { get; }
+
+        // A deliberately permanent TRUE flag used to bridge parts of conditions (glb.Bridge).
+        // Unlike glb.One it is not a neutral constant: every branch it short-circuits is a
+        // bypass that must be reported.
+        public bool IsBypassFlag { get; }
     }
 
     public sealed class BooleanConstantCatalogue
@@ -28,7 +39,8 @@ namespace TiaFds.Analysis
             new BooleanConstantCatalogue(new[]
             {
                 new BooleanConstantMapping("glb.One", true, "BP_GLB_ONE"),
-                new BooleanConstantMapping("glb.Zero", false, "BP_GLB_ZERO")
+                new BooleanConstantMapping("glb.Zero", false, "BP_GLB_ZERO"),
+                new BooleanConstantMapping("glb.Bridge", true, "BP_GLB_BRIDGE", true)
             });
 
         public BooleanConstantCatalogue(
@@ -92,6 +104,23 @@ namespace TiaFds.Analysis
                     mapping.RuleIdentifier);
                 return true;
             }
+            return false;
+        }
+
+        // True when a resolved constant's evidence comes from a bypass-flag mapping, directly
+        // or through a temporary trace ("TEMPORARY_TRACE:#t->BP_GLB_BRIDGE").
+        public bool IsBypassEvidence(string evidence, out string symbol)
+        {
+            symbol = null;
+            if (string.IsNullOrWhiteSpace(evidence)) return false;
+            foreach (BooleanConstantMapping mapping in mappings.Values)
+                if (mapping.IsBypassFlag && !string.IsNullOrWhiteSpace(mapping.RuleIdentifier) &&
+                    (evidence == mapping.RuleIdentifier ||
+                     evidence.EndsWith("->" + mapping.RuleIdentifier, StringComparison.Ordinal)))
+                {
+                    symbol = mapping.Symbol;
+                    return true;
+                }
             return false;
         }
 

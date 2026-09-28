@@ -112,7 +112,9 @@ Application version and schema version are independent. Schema `1.4` adds
 byte.bit `address` on data-block members (STEP 7 Classic only), plus an
 `operation` on logic assignments (`Assign` for `=`, `Set` for `S`, `Reset`
 for `R`). Snapshots without `sourceKind` are TIA Portal exports; assignments
-without `operation` are coil assignments. Readers remain compatible with
+without `operation` are coil assignments. Schema 1.4 also adds member
+`actualValue` and `inventory.startupValues` (library startup initialisation).
+Readers remain compatible with
 schemas `1.0` through `1.3`.
 
 Schema `1.3` extends the `1.2` block-call contract with neutral PLC logic
@@ -169,6 +171,14 @@ forms). Matching is case-insensitive and exact after removing TIA identifier
 quotes. Names that merely contain `One`, `Zero`, `True`, or `False` are not
 constants. Numeric `0`/`1` remain unresolved without unambiguous boolean
 datatype evidence.
+
+`glb.Bridge` is also TRUE (rule `BP_GLB_BRIDGE`) but is flagged as a
+**bypass flag**: it is used deliberately to bridge logic, so it is not a
+neutral constant. When it short-circuits other operands (`(NOT HL1038.FLT OR
+glb.Bridge)`), or makes the whole condition TRUE, the condition is classified
+`BridgedOrBypassed` with rule `BYPASS_FLAG_APPLIED`, and a finding lists the
+bypassed operands. In series (`glb.Bridge AND x`) it removes nothing and is
+not counted.
 
 Analysis simplifies supported NOT/AND/OR trees and bounded local-temporary
 traces. Absorbing rules such as `FALSE AND Unknown = FALSE` and
@@ -242,6 +252,32 @@ Classic diagnostics use the `S7C` prefix:
 - `S7C005_SYMBOL_TABLE_NOT_FOUND`
 - `S7C006_POINTER_NOT_RESOLVED`
 - `S7C007_CALLED_BLOCK_NOT_IN_PROJECT`
+- `S7C008_SETUP_ROUTINE_NOT_RECOGNISED`
+- `S7C009_SETUP_ENTRY_NAME_MISMATCH`
+- `S7C010_DRIVE_NOT_INITIALISED_BY_SETUP`
+
+Data-block members also carry their **actual value** from the offline DB
+(`actualValue`), not just the declared start value.
+
+### Classic drive startup (`FnBlk.Setup.Drv`)
+
+`Global Setup` calls `FnBlk.Setup.Drv` on the first scan only (`A "glb.One";
+JC M001` skips it once `glb.One` is set). Its loops use indirect addressing,
+so the routine is recognised by name and applied as rule
+`CLASSIC_SETUP_DRV_STARTUP`, verified against the A-Mill FC51 code:
+
+```text
+zero db.cm.Drv
+for i in 0 .. NoDrives-1                       (NoDrives read from "L n; T #NoDrives")
+    db.cm.Drv[i].ILK := TRUE, .CR := TRUE     (only when the "L W#16#50; OW" mask is present)
+    db.cm.Drv[i].DrvType := db.Setup.Drv[i].DrvType   (actual value, paired by index)
+```
+
+The results are written to `inventory.startupValues`. Pairing is by index, so
+a setup entry with a different name raises `S7C009`, and drives at or beyond
+`NoDrives` raise `S7C010`. A member that no cyclic logic writes keeps its
+startup value, and the analyser reports it as a condition sourced from
+`FnBlk.Setup.Drv`. Any cyclic write supersedes the startup value.
 
 ### Classic block calls
 
@@ -397,10 +433,25 @@ STEP 7 Classic projects use the older library generation, with one processing FC
 | AnalogueOutput | `FnBlk.cm.AO` | — | FnBlk.cm.AO | `Udt.cm.AO` | `AOut` |
 | DigitalOutput | `FnBlk.cm.DO` | — | FnBlk.cm.DO | `Udt.cm.DO` | `Ctrl` |
 | Speed | `FnBlk.cm.Spd` | — | FnBlk.cm.Spd | `Udt.cm.Spd` | `Spd` |
+| Analogue | `FnBlkRAW.cm.AO` | — | FnBlkRAW.cm.AO | `Udt.cm.An` | `AOut` |
+| Analogue | `FnBlk.RAWScaling` | — | FnBlk.RAWScaling | `Udt.cm.An` | `AIn` |
+
+`Analogue` (`Udt.cm.An` in `db.cm.An`) is the Classic library's generic analogue module, used for both inputs and outputs.
 
 A changed drive FC number produces `CM113_FUNCTION_NUMBER_MISMATCH` but the name-matched call evidence is retained. Classic entries have no expected number (A-Mill's `FnBlk.cm.Drv` is FC50, the number TIA expects for `cm.DrvType0`). Unknown names that look like processing FCs (`cm.*Type*`, `FnBlk.cm.*`) raise `CM109`.
 
-The Drive ILK/CR polarity rules (`DRV_ILK_ACTIVE_HIGH_PERMISSIVE`, `DRV_CR_ACTIVE_HIGH_ENABLE`) apply only to catalogue entries flagged `DriveSemanticsConfirmed`, which currently means the four `cm.DrvType*` FCs. `FnBlk.cm.Drv` gates CR differently (only for DrvType 1, bypassed by `CmdMAN`), so constant Classic ILK/CR values stay in manual review until Classic rules are confirmed.
+The TIA Drive ILK/CR polarity rules (`DRV_ILK_ACTIVE_HIGH_PERMISSIVE`, `DRV_CR_ACTIVE_HIGH_ENABLE`) apply only to catalogue entries flagged `DriveSemanticsConfirmed`, which means the four `cm.DrvType*` FCs.
+
+Drives processed only by `FnBlk.cm.Drv` use the Classic rules. These were verified from the A-Mill FC50 code: ILK is read only in networks 10–11, CR only in network 13 (gated by DrvType 1, bypassed by `CmdMAN`), and DrvType only in networks 1–4.
+
+| Condition | DrvType | Classification | Rule |
+|---|---|---|---|
+| ILK constant TRUE / FALSE | any | `BridgedOrBypassed` / `PermanentlyAsserted` | `CLASSIC_DRV_ILK_ACTIVE_HIGH_PERMISSIVE` |
+| CR constant TRUE / FALSE | 1 | `PermanentlyEnabled` / `PermanentlyDisabled` | `CLASSIC_DRV_CR_ENABLE_DRVTYPE1` |
+| CR (dynamic or constant) | 0, 2, 3 | `NotUsedByProcessing` | `CLASSIC_DRV_CR_NOT_USED_FOR_DRVTYPE` |
+| CR constant | unknown | `RequiresManualInterpretation` | `CLASSIC_DRV_CR_DRVTYPE_UNKNOWN` |
+
+DrvType comes from the `FnBlk.Setup.Drv` startup model. The report shows it per module (`configuredDriveType`, and the last `Modules` column `Drive Type`), and counts `NotUsedByProcessing` conditions in the summary (`notUsedByProcessingCount`). Cyclic CR logic on a drive whose type ignores CR is reported, because it has no effect on the motor.
 
 ## InOut selection and correlation
 

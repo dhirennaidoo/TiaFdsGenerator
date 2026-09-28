@@ -215,7 +215,9 @@ namespace TiaFds.Step7Classic
                         parameter.Name,
                         parameter.DataType.ToString(),
                         parameter.DataType == S7DataRowType.UDT ? parameter.DataTypeBlockNumber : (int?)null,
-                        ReadMembers(parameter)));
+                        ReadMembers(parameter),
+                        parameter.BlockAddress == null ? (int?)null : parameter.BlockAddress.ByteAddress,
+                        parameter.BlockAddress == null ? 0 : parameter.BlockAddress.BitAddress));
                 }
             }
             return parameters;
@@ -370,7 +372,12 @@ namespace TiaFds.Step7Classic
         {
             try
             {
-                var dataBlock = folder.GetBlock(info) as S7DataBlock;
+                // Actual values (not just declared start values) carry configuration such as
+                // each drive's DrvType in db.Setup.Drv.
+                var dataBlock = folder.GetBlock(info, new S7ConvertingOptions(MnemonicLanguage.English)
+                {
+                    UseDBActualValues = true
+                }) as S7DataBlock;
                 if (dataBlock == null)
                     return new DecodedDataBlock(info.IsInstance,
                         new Step7DataBlockModel(info.BlockNumber, null, "The block did not decode as a data block."));
@@ -423,7 +430,18 @@ namespace TiaFds.Step7Classic
                 row.BlockAddress == null ? 0 : row.BlockAddress.BitAddress,
                 row.IsArray,
                 row.IsArray ? ArrayBounds(row) : null,
+                row.Children == null || row.Children.Count == 0 ? ValueText(row.Value) : null,
                 MapChildren(row));
+        }
+
+        private static string ValueText(object value)
+        {
+            if (value == null) return null;
+            if (value is bool) return (bool)value ? "TRUE" : "FALSE";
+            var formattable = value as IFormattable;
+            return formattable != null
+                ? formattable.ToString(null, CultureInfo.InvariantCulture)
+                : value.ToString();
         }
 
         private static string ArrayBounds(S7DataRow row)

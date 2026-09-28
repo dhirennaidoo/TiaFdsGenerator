@@ -66,7 +66,10 @@ namespace TiaFds.Analysis
         PermanentlyDisabled,
         BridgedOrBypassed,
         PermanentlyAsserted,
-        RequiresManualInterpretation
+        RequiresManualInterpretation,
+        // The processing FC ignores this channel for the module's configured type
+        // (e.g. Classic FnBlk.cm.Drv reads CR only for DrvType 1).
+        NotUsedByProcessing
     }
 
     public enum BehaviourConstantFindingKind
@@ -78,7 +81,8 @@ namespace TiaFds.Analysis
         ConditionPermanentlyAsserted,
         ConstantBranchRemoved,
         KnownConstantResolved,
-        ConstantSemanticsUnknown
+        ConstantSemanticsUnknown,
+        ChannelNotUsedByProcessing
     }
 
     public sealed class ResolvedBooleanConstant

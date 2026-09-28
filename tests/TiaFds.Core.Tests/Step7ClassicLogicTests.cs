@@ -243,6 +243,79 @@ namespace TiaFds.Core.Tests
             Assert.AreEqual(ExtractedLogicOperation.Assign, parsed.Operation);
         }
 
+        [TestMethod]
+        public void Analyzer_CountsBridgeFlagBranchesAsBypassed()
+        {
+            // ILK = NOT LS1035.FLT AND (NOT M0.5 OR glb.Bridge): the M0.5 check is bypassed.
+            EngineeringSnapshot snapshot = Snapshot(Map(Network(
+                S("AN", "DB90.DBX 0.4"), S("A(", ""), S("ON", "M0.5"), S("O", "M0.2"), S(")", ""),
+                S("=", "DB50.DBX 50.4"))));
+
+            BehaviouralCondition ilk = Behaviour(snapshot).Conditions.Single();
+            Assert.AreEqual(BehaviourConditionEffect.PartiallySimplified, ilk.Effect);
+            Assert.AreEqual(BehaviourReviewClassification.BridgedOrBypassed, ilk.ReviewClassification);
+            Assert.AreEqual(ControlModuleBehaviourAnalyzer.BypassFlagRule, ilk.SemanticRule);
+            Assert.AreEqual("NOT (\"db.cm.DI\".AM_LS1035.FLT)", ilk.SimplifiedExpression.DisplayText);
+            BehaviourConstantFinding bridged = ilk.ConstantFindings.Single(item =>
+                item.FindingKind == BehaviourConstantFindingKind.ConditionBridged);
+            StringAssert.Contains(bridged.Message, "glb.Bridge");
+            StringAssert.Contains(bridged.Message, "M0.5");
+        }
+
+        [TestMethod]
+        public void Analyzer_BridgeFlagInSeriesIsNotABypass()
+        {
+            // glb.Bridge AND M0.5 removes nothing: TRUE AND x = x.
+            EngineeringSnapshot snapshot = Snapshot(Map(Network(
+                S("A", "M0.2"), S("A", "DB90.DBX 0.4"), S("=", "DB50.DBX 50.4"))));
+
+            BehaviouralCondition ilk = Behaviour(snapshot).Conditions.Single();
+            Assert.AreNotEqual(BehaviourReviewClassification.BridgedOrBypassed, ilk.ReviewClassification);
+            Assert.AreEqual(BehaviourConditionEffect.Dynamic, ilk.Effect);
+        }
+
+        [TestMethod]
+        public void Catalogue_BridgeIsATrueBypassFlagAndAnalogueIsAFamily()
+        {
+            ResolvedBooleanConstant constant;
+            bool conflict;
+            Assert.IsTrue(BooleanConstantCatalogue.Default.TryResolve("\"glb.Bridge\"", null, out constant, out conflict));
+            Assert.IsTrue(constant.Value);
+            string symbol;
+            Assert.IsTrue(BooleanConstantCatalogue.Default.IsBypassEvidence(constant.Evidence, out symbol));
+            Assert.AreEqual("glb.Bridge", symbol);
+            Assert.IsTrue(BooleanConstantCatalogue.Default.TryResolve("glb.One", null, out constant, out conflict));
+            Assert.IsFalse(BooleanConstantCatalogue.Default.IsBypassEvidence(constant.Evidence, out symbol),
+                "glb.One is a neutral constant, not a bypass.");
+
+            ControlModuleTypeDefinition analogue = ControlModuleCatalogue.FindByDataType("Udt.cm.An");
+            Assert.AreEqual("Analogue", analogue.ModuleFamily);
+            Assert.AreEqual("db.cm.An", analogue.ExpectedContainerDbName);
+            Assert.AreEqual("Analogue", ControlModuleFunctionCatalogue.FindByFunctionName("FnBlk.RAWScaling").ModuleFamily);
+            Assert.AreEqual("Udt.cm.An", ControlModuleFunctionCatalogue.FindByFunctionName("FnBlkRAW.cm.AO").ExpectedModuleDataType);
+        }
+
+        [TestMethod]
+        public void Correlation_AnalogueModulesUseRawProcessingFunctions()
+        {
+            var module = new DataBlockMemberInfo("AM_WE0003", "db.cm.An.AM_WE0003", "Udt.cm.An", null, 0, false, null, "42.0", null);
+            var structure = new DataBlockStructureInfo("db.cm.An", 82, "Blocks", new[] { module }, null);
+            var call = new BlockCallInfo("VitFeeders", 300, "Function", "Blocks/VitFeeders", "FnBlk.RAWScaling", 83, "FC",
+                4, "Scale", 1, new[] { new CallParameterInfo("AIn", "InOut", "Udt.cm.An", "P#DB82.DBX 42.0", "db.cm.An.AM_WE0003") },
+                null);
+            var inventory = new PlcInventory("S7 Program", null, null, null, null, new[] { structure }, true, new[] { call }, true);
+            var snapshot = new EngineeringSnapshot(SnapshotSchema.CurrentVersion, ProductVersion.Current, FixedTime,
+                new ProjectSnapshot("A-Mill", "A-Mill.s7p", null, SnapshotSourceKind.Step7Classic,
+                    Step7InventoryMapper.ToPlcInfo(Program), inventory));
+
+            ControlModuleDiscoveryResult discovery = new ControlModuleContainerAnalyzer().Analyze(snapshot);
+            Assert.AreEqual("Analogue", discovery.Modules.Single().ModuleFamily);
+            Assert.AreEqual(ControlModuleDiscoveryStatus.Confirmed, discovery.Modules.Single().Status);
+            ControlModuleImplementation implementation = new ControlModuleCallAnalyzer().Analyze(snapshot, discovery).Modules.Single();
+            Assert.AreEqual(ControlModuleImplementationStatus.Correlated, implementation.Status);
+            Assert.AreEqual("FnBlk.RAWScaling", implementation.CallSites.Single().ProcessingVariant);
+        }
+
         // --- Fixture -------------------------------------------------------------------------
 
         private static Step7StatementModel S(string command, string operand)
@@ -324,7 +397,8 @@ namespace TiaFds.Core.Tests
                 new Step7SymbolModel("db.seq", "DB 200", "DB 200", ""),
                 new Step7SymbolModel("Udt.cm.Drv", "UDT 50", "UDT 50", ""),
                 new Step7SymbolModel("Udt.cm.DI", "UDT 90", "UDT 90", ""),
-                new Step7SymbolModel("UDT Sequence", "UDT 200", "UDT 200", "")
+                new Step7SymbolModel("UDT Sequence", "UDT 200", "UDT 200", ""),
+                new Step7SymbolModel("glb.Bridge", "M 0.2", "BOOL", "")
             };
             var blocks = new[]
             {

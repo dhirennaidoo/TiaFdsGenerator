@@ -193,7 +193,23 @@ namespace TiaFds.Step7Classic
             bool isArray,
             string arrayBounds,
             IReadOnlyList<Step7DataRowModel> children)
+            : this(name, elementaryType, userDataTypeNumber, comment, byteAddress, bitAddress, isArray, arrayBounds, null, children)
         {
+        }
+
+        public Step7DataRowModel(
+            string name,
+            string elementaryType,
+            int? userDataTypeNumber,
+            string comment,
+            int byteAddress,
+            int bitAddress,
+            bool isArray,
+            string arrayBounds,
+            string actualValue,
+            IReadOnlyList<Step7DataRowModel> children)
+        {
+            ActualValue = string.IsNullOrWhiteSpace(actualValue) ? null : actualValue;
             Name = name ?? string.Empty;
             ElementaryType = elementaryType ?? string.Empty;
             UserDataTypeNumber = userDataTypeNumber;
@@ -216,6 +232,8 @@ namespace TiaFds.Step7Classic
         public bool IsArray { get; }
         // STEP 7 bounds text, e.g. "1..10" or "1..4,0..2".
         public string ArrayBounds { get; }
+        // Current value stored in the offline DB for elementary members (invariant text).
+        public string ActualValue { get; }
         public IReadOnlyList<Step7DataRowModel> Children { get; }
     }
 
@@ -257,7 +275,21 @@ namespace TiaFds.Step7Classic
             string elementaryType,
             int? userDataTypeNumber,
             IReadOnlyList<Step7InterfaceMemberModel> members)
+            : this(section, name, elementaryType, userDataTypeNumber, members, null, 0)
         {
+        }
+
+        public Step7InterfaceParameterModel(
+            string section,
+            string name,
+            string elementaryType,
+            int? userDataTypeNumber,
+            IReadOnlyList<Step7InterfaceMemberModel> members,
+            int? byteAddress,
+            int bitAddress)
+        {
+            ByteAddress = byteAddress;
+            BitAddress = bitAddress;
             Section = section ?? string.Empty;
             Name = name ?? string.Empty;
             ElementaryType = elementaryType ?? string.Empty;
@@ -272,6 +304,9 @@ namespace TiaFds.Step7Classic
         public int? UserDataTypeNumber { get; }
         // Flattened members of a UDT/STRUCT parameter, addressed relative to the parameter's start.
         public IReadOnlyList<Step7InterfaceMemberModel> Members { get; }
+        // Address within its section (for TEMP: the local-data address, e.g. LW28 = 28.0).
+        public int? ByteAddress { get; }
+        public int BitAddress { get; }
     }
 
     public sealed class Step7InterfaceMemberModel

@@ -28,7 +28,9 @@ namespace TiaFds.Analysis
                 new ControlModuleTypeDefinition("DigitalInput", "Udt.cm.DI", "db.cm.DI"),
                 new ControlModuleTypeDefinition("AnalogueInput", "Udt.cm.AI", "db.cm.AI"),
                 new ControlModuleTypeDefinition("AnalogueOutput", "Udt.cm.AO", "db.cm.AO"),
-                new ControlModuleTypeDefinition("DigitalOutput", "Udt.cm.DO", "db.cm.DO")
+                new ControlModuleTypeDefinition("DigitalOutput", "Udt.cm.DO", "db.cm.DO"),
+                // Generic analogue module (STEP 7 Classic library), used for inputs and outputs.
+                new ControlModuleTypeDefinition("Analogue", "Udt.cm.An", "db.cm.An")
             };
 
         public static IReadOnlyList<ControlModuleTypeDefinition> Definitions => DefinitionsValue;

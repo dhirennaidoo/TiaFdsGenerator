@@ -14,6 +14,12 @@ namespace TiaFds.Analysis
             "^(SA|CR|ILK|CmdSA)(?:\\[(\\d+)\\]|(\\d+))?$",
             RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
         public const string LatchConstantRule = "LATCH_CONSTANT_REQUIRES_REVIEW";
+        public const string BypassFlagRule = "BYPASS_FLAG_APPLIED";
+        public const string ClassicIlkRule = "CLASSIC_DRV_ILK_ACTIVE_HIGH_PERMISSIVE";
+        public const string ClassicCrDriveType1Rule = "CLASSIC_DRV_CR_ENABLE_DRVTYPE1";
+        public const string ClassicCrNotUsedRule = "CLASSIC_DRV_CR_NOT_USED_FOR_DRVTYPE";
+        public const string ClassicCrDriveTypeUnknownRule = "CLASSIC_DRV_CR_DRVTYPE_UNKNOWN";
+        public const string StartupValueTitle = "Startup value (no cyclic assignment)";
         private readonly BooleanConstantCatalogue constantCatalogue;
         private readonly IBehaviourConditionSemantics semantics;
 
@@ -48,10 +54,14 @@ namespace TiaFds.Analysis
             var conditions = new List<BehaviouralCondition>();
             var diagnostics = new List<BehaviouralDiagnostic>();
             var reviews = new List<BehaviouralManualReviewItem>();
-            var assignmentsByScope = IndexAssignments(inventory.LogicAssignments);
+            // Members that no cyclic logic writes keep the value a recognised library startup
+            // routine gave them; they are analysed as a constant assignment from that routine.
+            List<ExtractedLogicAssignment> logic = WithStartupValues(inventory);
+            var driveTypes = DriveTypes(inventory);
+            var assignmentsByScope = IndexAssignments(logic);
             var behavioural = new List<AssignmentContext>();
 
-            foreach (ExtractedLogicAssignment assignment in inventory.LogicAssignments)
+            foreach (ExtractedLogicAssignment assignment in logic)
             {
                 ControlModuleInfo module = FindOwner(discovery.Modules,
                     assignment.ResolvedDestinationPath);
@@ -202,8 +212,31 @@ namespace TiaFds.Analysis
                     interpretation = new BehaviourSemanticInterpretation(
                         BehaviourReviewClassification.RequiresManualInterpretation,
                         LatchConstantRule, true);
+                string classificationMessage = null;
+                int? driveType = module == null ? null : DriveType(driveTypes, module);
+                if (module != null && assignment.Operation == ExtractedLogicOperation.Assign &&
+                    IsClassicDrive(module, variants))
+                    interpretation = ClassicDriveInterpretation(
+                        item.Kind, simplification.EffectiveValue, driveType, interpretation,
+                        out classificationMessage);
+                if (IsStartupValue(assignment) && simplification.EffectiveValue.HasValue)
+                    classificationMessage = "No cyclic logic writes " + item.Member + "; it keeps the startup value " +
+                        (simplification.EffectiveValue.Value ? "TRUE" : "FALSE") + " set by " + assignment.BlockName +
+                        (classificationMessage == null ? "." : ". " + classificationMessage);
+
+                // A bypass flag (glb.Bridge) that short-circuits other operands bridges that
+                // part of the condition, even when the remainder stays dynamic.
+                string bypassMessage = interpretation.Classification ==
+                    BehaviourReviewClassification.NotUsedByProcessing ? null : BypassMessage(simplification);
+                if (bypassMessage != null)
+                {
+                    interpretation = new BehaviourSemanticInterpretation(
+                        BehaviourReviewClassification.BridgedOrBypassed,
+                        BypassFlagRule, false);
+                    classificationMessage = bypassMessage;
+                }
                 IReadOnlyList<BehaviourConstantFinding> findings = BuildFindings(
-                    item, simplification, effect, interpretation);
+                    item, simplification, effect, interpretation, classificationMessage);
 
                 var operands = new List<string>();
                 var paths = new List<string>();
@@ -305,11 +338,154 @@ namespace TiaFds.Analysis
             return values.ToArray();
         }
 
+        private static List<ExtractedLogicAssignment> WithStartupValues(PlcInventory inventory)
+        {
+            var result = new List<ExtractedLogicAssignment>(inventory.LogicAssignments);
+            var written = new HashSet<string>(
+                inventory.LogicAssignments
+                    .Where(item => !string.IsNullOrWhiteSpace(item.ResolvedDestinationPath))
+                    .Select(item => item.ResolvedDestinationPath),
+                StringComparer.OrdinalIgnoreCase);
+            foreach (StartupValueInfo value in inventory.StartupValues)
+            {
+                bool? boolean = value.BooleanValue;
+                if (!boolean.HasValue || written.Contains(value.MemberPath)) continue;
+                var constant = new ExtractedBooleanExpression(ExtractedBooleanExpressionKind.Constant,
+                    boolean.Value ? "TRUE" : "FALSE", null, boolean.Value, null);
+                result.Add(new ExtractedLogicAssignment(
+                    value.MemberPath, value.MemberPath, constant,
+                    value.Rule + ": " + value.Evidence,
+                    value.SourceBlockName, null, "Function", null, null,
+                    StartupValueTitle, value.Rule, 0,
+                    ExtractedLogicResolutionStatus.Complete, ExtractedLogicOperation.Assign));
+            }
+            return result;
+        }
+
+        private static bool IsStartupValue(ExtractedLogicAssignment assignment)
+        {
+            return string.Equals(assignment.NetworkTitle, StartupValueTitle, StringComparison.Ordinal) &&
+                   !assignment.NetworkNumber.HasValue;
+        }
+
+        private static Dictionary<string, int> DriveTypes(PlcInventory inventory)
+        {
+            var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (StartupValueInfo value in inventory.StartupValues)
+                if (value.MemberPath.EndsWith(".DrvType", StringComparison.OrdinalIgnoreCase) && value.IntegerValue.HasValue)
+                    result[value.MemberPath.Substring(0, value.MemberPath.Length - ".DrvType".Length)] = value.IntegerValue.Value;
+            return result;
+        }
+
+        private static int? DriveType(IDictionary<string, int> driveTypes, ControlModuleInfo module)
+        {
+            int value;
+            return driveTypes.TryGetValue(module.MemberPath, out value) ? value : (int?)null;
+        }
+
+        // Drives processed only by the STEP 7 Classic FnBlk.cm.Drv.
+        private static bool IsClassicDrive(ControlModuleInfo module, IReadOnlyList<string> variants)
+        {
+            if (!string.Equals(module.ModuleFamily, "Drive", StringComparison.OrdinalIgnoreCase) ||
+                variants == null || variants.Count == 0) return false;
+            foreach (string variant in variants)
+            {
+                ControlModuleFunctionDefinition definition = ControlModuleFunctionCatalogue.FindByFunctionName(variant);
+                if (definition == null ||
+                    !definition.FunctionName.StartsWith(ControlModuleFunctionCatalogue.ClassicFunctionPrefix,
+                        StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+            return true;
+        }
+
+        // FnBlk.cm.Drv, verified from the A-Mill FC50 code: ILK is read in networks 10-11 as an
+        // active-high start permissive (FALSE without override cancels the start); CR is read
+        // only in network 13, gated by DrvType 1 and bypassed by CmdMAN.
+        private static BehaviourSemanticInterpretation ClassicDriveInterpretation(
+            BehaviouralConditionKind kind, bool? value, int? driveType,
+            BehaviourSemanticInterpretation current, out string message)
+        {
+            message = null;
+            if (kind == BehaviouralConditionKind.Interlock)
+            {
+                if (!value.HasValue) return current;
+                return new BehaviourSemanticInterpretation(
+                    value.Value ? BehaviourReviewClassification.BridgedOrBypassed
+                                : BehaviourReviewClassification.PermanentlyAsserted,
+                    ClassicIlkRule, false);
+            }
+            if (kind != BehaviouralConditionKind.ControlRequest) return current;
+
+            if (driveType == 1)
+            {
+                if (!value.HasValue) return current;
+                return new BehaviourSemanticInterpretation(
+                    value.Value ? BehaviourReviewClassification.PermanentlyEnabled
+                                : BehaviourReviewClassification.PermanentlyDisabled,
+                    ClassicCrDriveType1Rule, false);
+            }
+            if (driveType.HasValue)
+            {
+                message = "FnBlk.cm.Drv reads CR only for DrvType 1; this drive is DrvType " +
+                          driveType.Value + ", so CR has no effect on the motor output.";
+                return new BehaviourSemanticInterpretation(
+                    BehaviourReviewClassification.NotUsedByProcessing, ClassicCrNotUsedRule, false);
+            }
+            if (!value.HasValue) return current;
+            message = "The drive type is unknown, so the effect of a constant CR cannot be determined.";
+            return new BehaviourSemanticInterpretation(
+                BehaviourReviewClassification.RequiresManualInterpretation, ClassicCrDriveTypeUnknownRule, true);
+        }
+
+        // Null unless a bypass-flag constant is present and removes other operands (or makes
+        // the whole condition TRUE); otherwise a message naming the flag and what it bypasses.
+        private string BypassMessage(BehaviourExpressionSimplificationResult simplification)
+        {
+            string symbol = null;
+            foreach (ResolvedBooleanConstant constant in simplification.Constants)
+            {
+                string candidate;
+                if (constant.Value && constantCatalogue.IsBypassEvidence(constant.Evidence, out candidate))
+                {
+                    symbol = candidate;
+                    break;
+                }
+            }
+            if (symbol == null) return null;
+
+            var remaining = new List<string>();
+            CollectVariableOperands(simplification.SimplifiedExpression, remaining);
+            var removed = new List<string>();
+            var original = new List<string>();
+            CollectVariableOperands(simplification.OriginalExpression, original);
+            foreach (string operand in original)
+            {
+                if (remaining.Remove(operand)) continue;
+                if (!removed.Contains(operand)) removed.Add(operand);
+            }
+
+            if (removed.Count == 0 && simplification.EffectiveValue != true) return null;
+            return removed.Count == 0
+                ? "Bypass flag '" + symbol + "' is always TRUE and bridges the whole condition."
+                : "Bypass flag '" + symbol + "' is always TRUE and bypasses: " + string.Join(", ", removed) + ".";
+        }
+
+        private static void CollectVariableOperands(BehaviourExpression expression, ICollection<string> operands)
+        {
+            if (expression == null) return;
+            if (expression.Kind == BehaviourExpressionKind.Operand && expression.ResolvedConstant == null)
+                operands.Add(expression.DisplayText);
+            foreach (BehaviourExpression child in expression.Children)
+                CollectVariableOperands(child, operands);
+        }
+
         private static IReadOnlyList<BehaviourConstantFinding> BuildFindings(
             AssignmentContext item,
             BehaviourExpressionSimplificationResult simplification,
             BehaviourConditionEffect effect,
-            BehaviourSemanticInterpretation interpretation)
+            BehaviourSemanticInterpretation interpretation,
+            string classificationMessage)
         {
             var result = new List<BehaviourConstantFinding>();
             foreach (ResolvedBooleanConstant constant in simplification.Constants)
@@ -342,6 +518,13 @@ namespace TiaFds.Analysis
                     "The behavioural condition simplifies to a permanent boolean value."));
 
             if (interpretation.Classification ==
+                BehaviourReviewClassification.NotUsedByProcessing)
+                result.Add(Finding(item,
+                    BehaviourConstantFindingKind.ChannelNotUsedByProcessing,
+                    "Information", simplification, interpretation,
+                    simplification.EffectiveValue,
+                    classificationMessage ?? "The processing FC does not use this channel for the module's configured type."));
+            else if (interpretation.Classification ==
                 BehaviourReviewClassification.PermanentlyDisabled)
                 result.Add(Finding(item,
                     BehaviourConstantFindingKind.ConditionDisabled,
@@ -354,7 +537,7 @@ namespace TiaFds.Analysis
                     BehaviourConstantFindingKind.ConditionBridged,
                     "Warning", simplification, interpretation,
                     simplification.EffectiveValue,
-                    "The confirmed semantic rule identifies a bridged or bypassed condition."));
+                    classificationMessage ?? "The confirmed semantic rule identifies a bridged or bypassed condition."));
             else if (interpretation.Classification ==
                      BehaviourReviewClassification.PermanentlyAsserted)
                 result.Add(Finding(item,

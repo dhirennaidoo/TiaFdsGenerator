@@ -96,6 +96,9 @@ namespace TiaFds.Step7Classic
                 foreach (BlockCallInfo call in calls) builder.AddBlockCall(call);
                 foreach (InventoryDiagnostic diagnostic in diagnostics) builder.AddDiagnostic(diagnostic);
 
+                // Library startup initialisation (drive DrvType, ILK/CR defaults).
+                Step7ClassicSetupModel.Apply(program, symbols, structures, calls, builder);
+
                 // The same decompiled networks carry the boolean logic (=, S, R). Interface
                 // references are bound to the actual argument of a block's only call site.
                 builder.MarkLogicAssignmentsIncluded();
@@ -211,6 +214,7 @@ namespace TiaFds.Step7Classic
                 row.ArrayBounds,
                 row.ByteAddress.ToString(CultureInfo.InvariantCulture) + "." +
                 row.BitAddress.ToString(CultureInfo.InvariantCulture),
+                row.ActualValue,
                 children);
         }
 

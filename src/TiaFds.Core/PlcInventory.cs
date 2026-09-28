@@ -7,7 +7,6 @@ namespace TiaFds.Core
     [JsonObject(MemberSerialization.OptIn)]
     public sealed class PlcInventory
     {
-        [JsonConstructor]
         public PlcInventory(
             string plcName,
             IReadOnlyList<ProgramBlockInfo> programBlocks,
@@ -20,7 +19,28 @@ namespace TiaFds.Core
             bool blockCallsIncluded,
             IReadOnlyList<ExtractedLogicAssignment> logicAssignments,
             bool logicAssignmentsIncluded)
+            : this(plcName, programBlocks, tagTables, dataTypes, diagnostics, dataBlockStructures,
+                dataBlockStructuresIncluded, blockCalls, blockCallsIncluded, logicAssignments,
+                logicAssignmentsIncluded, null)
         {
+        }
+
+        [JsonConstructor]
+        public PlcInventory(
+            string plcName,
+            IReadOnlyList<ProgramBlockInfo> programBlocks,
+            IReadOnlyList<PlcTagTableInfo> tagTables,
+            IReadOnlyList<PlcDataTypeInfo> dataTypes,
+            IReadOnlyList<InventoryDiagnostic> diagnostics,
+            IReadOnlyList<DataBlockStructureInfo> dataBlockStructures,
+            bool dataBlockStructuresIncluded,
+            IReadOnlyList<BlockCallInfo> blockCalls,
+            bool blockCallsIncluded,
+            IReadOnlyList<ExtractedLogicAssignment> logicAssignments,
+            bool logicAssignmentsIncluded,
+            IReadOnlyList<StartupValueInfo> startupValues)
+        {
+            StartupValues = Copy(startupValues);
             PlcName = plcName;
             ProgramBlocks = Copy(programBlocks);
             TagTables = Copy(tagTables);
@@ -107,6 +127,10 @@ namespace TiaFds.Core
 
         [JsonProperty("logicAssignmentsIncluded")]
         public bool LogicAssignmentsIncluded { get; }
+
+        // Values established at CPU start by recognised library initialisation (schema 1.4).
+        [JsonProperty("startupValues")]
+        public IReadOnlyList<StartupValueInfo> StartupValues { get; }
 
         public IReadOnlyList<ProgramBlockCategoryCount> ProgramBlockCategories { get; }
 

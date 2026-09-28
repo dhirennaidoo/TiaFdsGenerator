@@ -253,8 +253,10 @@ namespace TiaFds.Reporting
             string dataTypeName, string discoveryStatus,
             AnalysisImplementationStatus implementationStatus,
             IReadOnlyList<AnalysisCallSite> callSites,
-            IReadOnlyList<AnalysisBehaviouralCondition> behaviouralConditions = null)
+            IReadOnlyList<AnalysisBehaviouralCondition> behaviouralConditions = null,
+            int? configuredDriveType = null)
         {
+            ConfiguredDriveType = configuredDriveType;
             ModuleName = moduleName;
             ModuleFamily = moduleFamily;
             Description = description;
@@ -277,6 +279,9 @@ namespace TiaFds.Reporting
         [JsonProperty("discoveryStatus")] public string DiscoveryStatus { get; }
         [JsonProperty("status")] public AnalysisImplementationStatus ImplementationStatus { get; }
         [JsonProperty("processingCalls")] public IReadOnlyList<AnalysisCallSite> CallSites { get; }
+        // STEP 7 Classic drives: DrvType established at startup by FnBlk.Setup.Drv (report schema 1.3).
+        [JsonProperty("configuredDriveType", NullValueHandling = NullValueHandling.Ignore)]
+        public int? ConfiguredDriveType { get; }
         [JsonProperty("startCommands")]
         public IReadOnlyList<AnalysisBehaviouralCondition> StartCommands
         {
@@ -513,7 +518,8 @@ namespace TiaFds.Reporting
         PermanentlyDisabled,
         BridgedOrBypassed,
         PermanentlyAsserted,
-        RequiresManualInterpretation
+        RequiresManualInterpretation,
+        NotUsedByProcessing
     }
 
     [JsonObject(MemberSerialization.OptIn)]
@@ -541,7 +547,25 @@ namespace TiaFds.Reporting
             int permanentlyFalseCount, int permanentlyEnabledCount,
             int permanentlyDisabledCount, int bridgedOrBypassedCount,
             int permanentlyAssertedCount, int semanticReviewRequiredCount)
+            : this(totalConditionCount, startCommandCount, controlRequestCount, interlockCount,
+                completeCount, partialCount, unsupportedCount, unresolvedCount, ambiguousCount,
+                dynamicConditionCount, permanentlyTrueCount, permanentlyFalseCount,
+                permanentlyEnabledCount, permanentlyDisabledCount, bridgedOrBypassedCount,
+                permanentlyAssertedCount, semanticReviewRequiredCount, 0)
         {
+        }
+
+        public AnalysisBehaviourSummary(
+            int totalConditionCount, int startCommandCount, int controlRequestCount,
+            int interlockCount, int completeCount, int partialCount,
+            int unsupportedCount, int unresolvedCount, int ambiguousCount,
+            int dynamicConditionCount, int permanentlyTrueCount,
+            int permanentlyFalseCount, int permanentlyEnabledCount,
+            int permanentlyDisabledCount, int bridgedOrBypassedCount,
+            int permanentlyAssertedCount, int semanticReviewRequiredCount,
+            int notUsedByProcessingCount)
+        {
+            NotUsedByProcessingCount = notUsedByProcessingCount;
             TotalConditionCount = totalConditionCount;
             StartCommandCount = startCommandCount;
             ControlRequestCount = controlRequestCount;
@@ -577,6 +601,7 @@ namespace TiaFds.Reporting
         [JsonProperty("bridgedOrBypassedCount")] public int BridgedOrBypassedCount { get; }
         [JsonProperty("permanentlyAssertedCount")] public int PermanentlyAssertedCount { get; }
         [JsonProperty("semanticReviewRequiredCount")] public int SemanticReviewRequiredCount { get; }
+        [JsonProperty("notUsedByProcessingCount")] public int NotUsedByProcessingCount { get; }
     }
 
     [JsonObject(MemberSerialization.OptIn)]

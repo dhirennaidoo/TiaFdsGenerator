@@ -20,7 +20,7 @@ namespace TiaFds.Core
         {
         }
 
-        [JsonConstructor]
+        
         public DataBlockMemberInfo(
             string name,
             string memberPath,
@@ -31,7 +31,24 @@ namespace TiaFds.Core
             string arrayBounds,
             string address,
             IReadOnlyList<DataBlockMemberInfo> children)
+            : this(name, memberPath, dataTypeName, comment, nestingLevel, isArray, arrayBounds, address, null, children)
         {
+        }
+
+        [JsonConstructor]
+        public DataBlockMemberInfo(
+            string name,
+            string memberPath,
+            string dataTypeName,
+            string comment,
+            int nestingLevel,
+            bool isArray,
+            string arrayBounds,
+            string address,
+            string actualValue,
+            IReadOnlyList<DataBlockMemberInfo> children)
+        {
+            ActualValue = string.IsNullOrWhiteSpace(actualValue) ? null : actualValue;
             Name = name ?? string.Empty;
             MemberPath = memberPath ?? string.Empty;
             DataTypeName = dataTypeName ?? string.Empty;
@@ -68,6 +85,11 @@ namespace TiaFds.Core
         // extraction supplies it; TIA exports leave it null.
         [JsonProperty("address", NullValueHandling = NullValueHandling.Ignore)]
         public string Address { get; }
+
+        // Current (actual) value of an elementary member as stored in the offline DB, in
+        // invariant text form. STEP 7 Classic only; TIA exports leave it null.
+        [JsonProperty("actualValue", NullValueHandling = NullValueHandling.Ignore)]
+        public string ActualValue { get; }
 
         [JsonProperty("children")]
         public IReadOnlyList<DataBlockMemberInfo> Children { get; }

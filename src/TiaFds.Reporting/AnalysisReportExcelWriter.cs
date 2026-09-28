@@ -120,6 +120,8 @@ namespace TiaFds.Reporting
                 report.BehaviourSummary.PermanentlyAssertedCount);
             LabelValue(sheet, row++, "Semantic review required",
                 report.BehaviourSummary.SemanticReviewRequiredCount);
+            LabelValue(sheet, row++, "Not used by processing",
+                report.BehaviourSummary.NotUsedByProcessingCount);
 
             row++;
             Section(sheet, row++, "Family summary");
@@ -189,7 +191,7 @@ namespace TiaFds.Reporting
                 "Start Command Count", "Control Request Count", "Interlock Count",
                 "Incomplete Behaviour Count", "Permanently TRUE",
                 "Permanently FALSE", "Bridged/Bypassed",
-                "Permanently Disabled", "Behaviour Review Required"
+                "Permanently Disabled", "Behaviour Review Required", "Drive Type"
             };
             Header(sheet, 1, headers);
             var row = 2;
@@ -218,6 +220,7 @@ namespace TiaFds.Reporting
                 Number(sheet.Cell(row, 18), module.BridgedConditionCount);
                 Number(sheet.Cell(row, 19), module.DisabledConditionCount);
                 Number(sheet.Cell(row, 20), module.BehaviourReviewRequiredCount);
+                NullableNumber(sheet.Cell(row, 21), module.ConfiguredDriveType);
                 row++;
             }
             FinishTable(sheet, row - 1, headers.Length, "ModulesTable",

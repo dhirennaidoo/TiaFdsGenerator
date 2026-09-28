@@ -43,6 +43,7 @@ namespace TiaFds.Reporting
             writer.WriteLine("  Bridged/bypassed:  {0,5}", behaviour.BridgedOrBypassedCount);
             writer.WriteLine("  Permanently asserted:{0,3}", behaviour.PermanentlyAssertedCount);
             writer.WriteLine("  Semantic review:   {0,5}", behaviour.SemanticReviewRequiredCount);
+            writer.WriteLine("  Not used by type:  {0,5}", behaviour.NotUsedByProcessingCount);
             var noteworthy = new List<AnalysisBehaviouralCondition>();
             foreach (AnalysisBehaviouralCondition condition in report.BehaviouralConditions)
                 if (condition.EffectiveConstantValue.HasValue)
@@ -111,6 +112,8 @@ namespace TiaFds.Reporting
                     module.ContainerDbNumber.HasValue ? " (DB" + module.ContainerDbNumber.Value + ")" : string.Empty);
                 writer.WriteLine("  Datatype: {0}", module.DataTypeName);
                 writer.WriteLine("  Member path: {0}", module.MemberPath);
+                if (module.ConfiguredDriveType.HasValue)
+                    writer.WriteLine("  Drive type: {0}", module.ConfiguredDriveType.Value);
                 if (module.CallSites.Count == 0) continue;
                 writer.WriteLine("  Processing FC              Variant      Caller             Network");
                 foreach (AnalysisCallSite site in module.CallSites)

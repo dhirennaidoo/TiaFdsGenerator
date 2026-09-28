@@ -82,7 +82,10 @@ namespace TiaFds.Analysis
                 Definition("AnalogueInput", "FnBlk.cm.AI", null, "FnBlk.cm.AI", "Udt.cm.AI"),
                 Definition("AnalogueOutput", "FnBlk.cm.AO", null, "FnBlk.cm.AO", "Udt.cm.AO", "AOut"),
                 Definition("DigitalOutput", "FnBlk.cm.DO", null, "FnBlk.cm.DO", "Udt.cm.DO", "Ctrl"),
-                Definition("Speed", "FnBlk.cm.Spd", null, "FnBlk.cm.Spd", "Udt.cm.Spd", "Spd")
+                Definition("Speed", "FnBlk.cm.Spd", null, "FnBlk.cm.Spd", "Udt.cm.Spd", "Spd"),
+                // Raw-value processing of the generic analogue module.
+                Definition("Analogue", "FnBlkRAW.cm.AO", null, "FnBlkRAW.cm.AO", "Udt.cm.An", "AOut"),
+                Definition("Analogue", "FnBlk.RAWScaling", null, "FnBlk.RAWScaling", "Udt.cm.An", "AIn")
             };
 
         public static IReadOnlyList<ControlModuleFunctionDefinition> Definitions => Items;

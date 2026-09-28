@@ -32,8 +32,9 @@ namespace TiaFds.Reporting
                 behaviourConditions.Add(CopyBehaviourCondition(condition, behaviour.Diagnostics));
 
             var modules = new List<AnalysisModule>();
+            Dictionary<string, int> driveTypes = DriveTypes(snapshot);
             foreach (ControlModuleImplementation source in implementation.Modules)
-                modules.Add(CopyModule(source, behaviourConditions));
+                modules.Add(CopyModule(source, behaviourConditions, driveTypes));
             modules.Sort(CompareModules);
 
             var diagnostics = new List<AnalysisDiagnostic>();
@@ -159,9 +160,20 @@ namespace TiaFds.Reporting
                 new AnalysisDiagnosticCounts(baselineWarnings, baselineErrors));
         }
 
+        private static Dictionary<string, int> DriveTypes(EngineeringSnapshot snapshot)
+        {
+            var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (snapshot.Project == null || snapshot.Project.Inventory == null) return result;
+            foreach (StartupValueInfo value in snapshot.Project.Inventory.StartupValues)
+                if (value.MemberPath.EndsWith(".DrvType", StringComparison.OrdinalIgnoreCase) && value.IntegerValue.HasValue)
+                    result[value.MemberPath.Substring(0, value.MemberPath.Length - ".DrvType".Length)] = value.IntegerValue.Value;
+            return result;
+        }
+
         private static AnalysisModule CopyModule(
             ControlModuleImplementation source,
-            IReadOnlyList<AnalysisBehaviouralCondition> behaviourConditions)
+            IReadOnlyList<AnalysisBehaviouralCondition> behaviourConditions,
+            IDictionary<string, int> driveTypes)
         {
             var sites = new List<AnalysisCallSite>();
             foreach (ControlModuleCallSite site in source.CallSites)
@@ -183,7 +195,8 @@ namespace TiaFds.Reporting
                 declaration.ContainerDbName, declaration.ContainerDbNumber,
                 declaration.MemberPath, declaration.DataTypeName,
                 declaration.Status.ToString(), MapStatus(source.Status), sites.ToArray(),
-                moduleBehaviour.ToArray());
+                moduleBehaviour.ToArray(),
+                driveTypes.ContainsKey(declaration.MemberPath) ? driveTypes[declaration.MemberPath] : (int?)null);
         }
 
         private static AnalysisBehaviouralCondition CopyBehaviourCondition(
@@ -286,7 +299,9 @@ namespace TiaFds.Reporting
                 Count(conditions,
                     AnalysisBehaviourReviewClassification.PermanentlyAsserted),
                 Count(conditions,
-                    AnalysisBehaviourReviewClassification.RequiresManualInterpretation));
+                    AnalysisBehaviourReviewClassification.RequiresManualInterpretation),
+                Count(conditions,
+                    AnalysisBehaviourReviewClassification.NotUsedByProcessing));
         }
 
         private static int Count(

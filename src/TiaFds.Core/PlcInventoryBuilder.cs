@@ -15,6 +15,7 @@ namespace TiaFds.Core
         private readonly List<BlockCallInfo> blockCalls = new List<BlockCallInfo>();
         private readonly List<ExtractedLogicAssignment> logicAssignments =
             new List<ExtractedLogicAssignment>();
+        private readonly List<StartupValueInfo> startupValues = new List<StartupValueInfo>();
         private readonly HashSet<string> blockKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> tagTableKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> dataTypeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -152,6 +153,12 @@ namespace TiaFds.Core
             logicAssignments.Add(assignment);
         }
 
+        public void AddStartupValue(StartupValueInfo value)
+        {
+            if (value == null) throw new ArgumentNullException(nameof(value));
+            startupValues.Add(value);
+        }
+
         public PlcInventory Build()
         {
             blocks.Sort(CompareBlocks);
@@ -171,7 +178,8 @@ namespace TiaFds.Core
                 blockCalls,
                 blockCallsIncluded,
                 logicAssignments,
-                logicAssignmentsIncluded);
+                logicAssignmentsIncluded,
+                startupValues);
         }
 
         private static void AddMemberPaths(DataBlockMemberInfo member, ISet<string> paths)
