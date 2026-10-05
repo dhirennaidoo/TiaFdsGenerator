@@ -30,7 +30,7 @@ namespace TiaFds.Core.Tests
 
                 Assert.AreEqual(first, second);
                 JObject json = JObject.Parse(second);
-                Assert.AreEqual("1.3", (string)json["schemaVersion"]);
+                Assert.AreEqual("1.4", (string)json["schemaVersion"]);
                 Assert.AreEqual("Example", (string)json["project"]["projectName"]);
                 Assert.AreEqual(3, (int)json["moduleSummary"]["totalCount"]);
                 Assert.AreEqual(2, json["processingVariants"].Count());
@@ -72,7 +72,7 @@ namespace TiaFds.Core.Tests
                 {
                     CollectionAssert.AreEqual(
                         new[] { "Summary", "Modules", "Processing Calls",
-                            "Behavioural Conditions", "Diagnostics", "Manual Review" },
+                            "Behavioural Conditions", "Diagnostics", "Manual Review", "Call Parameters" },
                         workbook.Worksheets.Select(sheet => sheet.Name).ToArray());
                     IXLWorksheet summary = workbook.Worksheet("Summary");
                     Assert.AreEqual(3, FindSummaryValue(summary, "Total"));
@@ -103,7 +103,7 @@ namespace TiaFds.Core.Tests
                 File.WriteAllText(path, "not a workbook");
                 writer.Write(RepresentativeReport(), path);
                 using (var overwritten = new XLWorkbook(path))
-                    Assert.AreEqual(6, overwritten.Worksheets.Count);
+                    Assert.AreEqual(7, overwritten.Worksheets.Count);
             }
             finally
             {
@@ -134,7 +134,7 @@ namespace TiaFds.Core.Tests
                     foreach (string name in new[]
                     {
                         "Modules", "Processing Calls", "Behavioural Conditions",
-                        "Diagnostics", "Manual Review"
+                        "Diagnostics", "Manual Review", "Call Parameters"
                     })
                     {
                         Assert.AreEqual(1, workbook.Worksheet(name).LastRowUsed().RowNumber());

@@ -73,14 +73,18 @@ namespace TiaFds.Core.Tests
             CallParameterInfo rn = call.Parameters.Single(parameter => parameter.FormalName == "RN");
             Assert.AreEqual("Input", rn.Direction);
             Assert.AreEqual("BOOL", rn.FormalDataType);
-            Assert.AreEqual("L 0.0", rn.ActualExpression);
-            Assert.IsNull(rn.ResolvedMemberPath);
+            Assert.AreEqual("DB11.DBX 0.3", rn.ActualExpression, "Traced through '= L0.0' earlier in the network.");
+            Assert.AreEqual("L 0.0", rn.RawActualExpression);
+            Assert.AreEqual(CallParameterTraceStatus.Traced, rn.TraceStatus);
+            Assert.IsNull(rn.ResolvedMemberPath, "DB11 is not in the fixture's DB layouts.");
 
             CallParameterInfo drv = call.Parameters.Single(parameter => parameter.FormalName == "Drv");
             Assert.AreEqual("InOut", drv.Direction);
             Assert.AreEqual("Udt.cm.Drv", drv.FormalDataType, "Formal type comes from the called FC interface.");
-            Assert.AreEqual("P#DB50.DBX 50.0", drv.ActualExpression);
+            Assert.AreEqual("\"db.cm.Drv\".AM_M1020", drv.ActualExpression, "Pointers are shown by symbol.");
+            Assert.AreEqual("P#DB50.DBX 50.0", drv.RawActualExpression);
             Assert.AreEqual("db.cm.Drv.AM_M1020", drv.ResolvedMemberPath);
+            Assert.IsNull(drv.TraceStatus);
             Assert.AreEqual(0, call.Diagnostics.Count);
         }
 

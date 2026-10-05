@@ -277,6 +277,33 @@ namespace TiaFds.Core.Tests
                 item.ResolutionStatus == BehaviouralConditionResolutionStatus.Complete),
                 "Sequence start latches should resolve through the bound #Seq parameter.");
 
+            // Call parameters passed through local data are traced, or left raw with a diagnostic.
+            foreach (BlockCallInfo call in result.SelectedPlcInventory.BlockCalls.Where(item =>
+                         ControlModuleFunctionCatalogue.FindByFunctionName(item.CalledBlockName) != null))
+                foreach (CallParameterInfo parameter in call.Parameters.Where(item =>
+                             System.Text.RegularExpressions.Regex.IsMatch(item.ActualExpression ?? string.Empty, @"^L[BWD]?\s*\d")))
+                {
+                    Assert.AreEqual(CallParameterTraceStatus.NotTraced, parameter.TraceStatus,
+                        call.CallingBlockName + "/" + call.NetworkNumber + " " + parameter.FormalName);
+                    Assert.IsTrue(call.Diagnostics.Any(item =>
+                        item.Code == Step7DiagnosticCodes.CallInputNotTraced || item.Code == Step7DiagnosticCodes.CallOutputNotTraced));
+                }
+
+            // 08-Call-Parameter-Resolution acceptance example, when the sample is A-Mill.
+            BlockCallInfo vibrator = result.SelectedPlcInventory.BlockCalls.FirstOrDefault(item =>
+                item.CalledBlockName == "FnBlk.cm.Drv" &&
+                item.Parameters.Any(parameter => parameter.ResolvedMemberPath == "db.cm.Drv.AM_M1020"));
+            if (vibrator != null)
+            {
+                Func<string, string> actual = name => vibrator.Parameters.Single(item => item.FormalName == name).ActualExpression;
+                Assert.AreEqual("\"ioDI\".AM_M1020RN", actual("RN"));
+                Assert.AreEqual("\"glb.One\"", actual("TR"));
+                Assert.AreEqual("\"glb.One\"", actual("DR"));
+                Assert.AreEqual("\"db.glb.Flags\".AM_glbTransfer", actual("glbFlags"));
+                Assert.AreEqual("\"db.cm.Drv\".AM_M1020", actual("Drv"));
+                Assert.AreEqual("\"ioDO\".AM_M1020MO", actual("MO"));
+            }
+
             // A-Mill-style projects initialise drives with FnBlk.Setup.Drv; when present, every
             // drive with a startup DrvType is classified by the Classic drive rules.
             if (result.SelectedPlcInventory.StartupValues.Any())

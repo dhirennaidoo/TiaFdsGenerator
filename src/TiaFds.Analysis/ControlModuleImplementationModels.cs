@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TiaFds.Core;
 
 namespace TiaFds.Analysis
 {
@@ -20,7 +21,20 @@ namespace TiaFds.Analysis
             string callingBlockName, int? callingBlockNumber, string callingBlockType,
             int? networkNumber, string networkTitle, int callOrdinal,
             string inOutFormalParameterName, string inOutActualExpression)
+            : this(processingFunctionName, processingFunctionNumber, processingVariant,
+                callingBlockName, callingBlockNumber, callingBlockType, networkNumber,
+                networkTitle, callOrdinal, inOutFormalParameterName, inOutActualExpression, null)
         {
+        }
+
+        public ControlModuleCallSite(
+            string processingFunctionName, int? processingFunctionNumber, string processingVariant,
+            string callingBlockName, int? callingBlockNumber, string callingBlockType,
+            int? networkNumber, string networkTitle, int callOrdinal,
+            string inOutFormalParameterName, string inOutActualExpression,
+            IReadOnlyList<CallParameterInfo> parameters)
+        {
+            Parameters = parameters ?? new CallParameterInfo[0];
             ProcessingFunctionName = processingFunctionName;
             ProcessingFunctionNumber = processingFunctionNumber;
             ProcessingVariant = processingVariant;
@@ -45,6 +59,8 @@ namespace TiaFds.Analysis
         public int CallOrdinal { get; }
         public string InOutFormalParameterName { get; }
         public string InOutActualExpression { get; }
+        // Every actual parameter of the call (field signals, flags, outputs), not only the module.
+        public IReadOnlyList<CallParameterInfo> Parameters { get; }
     }
 
     public sealed class ControlModuleImplementation

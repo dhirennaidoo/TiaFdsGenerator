@@ -90,31 +90,39 @@ namespace TiaFds.Step7Classic
             if (program.CodeBlocksIncluded)
             {
                 var addresses = new Step7AddressResolver(structures);
+
+                // The decompiled networks carry the boolean logic (=, S, R). Parsing comes first
+                // because it also records the local data each CALL reads, which resolves the
+                // actuals LAD passes through local bits (RN := L 0.0).
+                var parser = new Step7StlLogicParser(symbols, addresses);
+                var traces = new Dictionary<string, Step7CallTrace>(StringComparer.Ordinal);
+                var parsed = new List<ExtractedLogicAssignment>();
+                foreach (Step7CodeBlockModel block in program.CodeBlocks)
+                {
+                    if (block.DecodeError != null || !IsProgramCode(block.Kind)) continue;
+                    Step7BlockModel listed = FindListed(program, block);
+                    parsed.AddRange(parser.Parse(
+                        block,
+                        symbols.NameOf(Step7BlockCallMapper.Prefix(block.Kind), block.Number),
+                        BlockTypeName(block.Kind, false),
+                        LanguageName(listed == null ? null : listed.Language),
+                        traces));
+                }
+
                 builder.MarkBlockCallsIncluded();
                 var diagnostics = new List<InventoryDiagnostic>();
-                IReadOnlyList<BlockCallInfo> calls = new Step7BlockCallMapper().Map(program, symbols, addresses, diagnostics);
+                IReadOnlyList<BlockCallInfo> calls = new Step7BlockCallMapper().Map(program, symbols, addresses, diagnostics, traces);
                 foreach (BlockCallInfo call in calls) builder.AddBlockCall(call);
                 foreach (InventoryDiagnostic diagnostic in diagnostics) builder.AddDiagnostic(diagnostic);
 
                 // Library startup initialisation (drive DrvType, ILK/CR defaults).
                 Step7ClassicSetupModel.Apply(program, symbols, structures, calls, builder);
 
-                // The same decompiled networks carry the boolean logic (=, S, R). Interface
-                // references are bound to the actual argument of a block's only call site.
+                // Interface references are bound to the actual argument of a block's only call site.
                 builder.MarkLogicAssignmentsIncluded();
-                var parser = new Step7StlLogicParser(symbols, addresses);
                 var binder = new Step7ParameterBinder(calls, addresses);
-                foreach (Step7CodeBlockModel block in program.CodeBlocks)
-                {
-                    if (block.DecodeError != null || !IsProgramCode(block.Kind)) continue;
-                    Step7BlockModel listed = FindListed(program, block);
-                    foreach (ExtractedLogicAssignment assignment in parser.Parse(
-                                 block,
-                                 symbols.NameOf(Step7BlockCallMapper.Prefix(block.Kind), block.Number),
-                                 BlockTypeName(block.Kind, false),
-                                 LanguageName(listed == null ? null : listed.Language)))
-                        builder.AddLogicAssignment(binder.Bind(assignment));
-                }
+                foreach (ExtractedLogicAssignment assignment in parsed)
+                    builder.AddLogicAssignment(binder.Bind(assignment));
             }
 
             return builder.Build();

@@ -160,6 +160,45 @@ namespace TiaFds.Reporting
                 new AnalysisDiagnosticCounts(baselineWarnings, baselineErrors));
         }
 
+        // The library's placeholder for an unconnected parameter.
+        private static readonly HashSet<string> NotConnectedSymbols =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "glb.DontCare" };
+
+        private static AnalysisCallParameter[] CopyParameters(IReadOnlyList<CallParameterInfo> parameters)
+        {
+            var result = new List<AnalysisCallParameter>();
+            foreach (CallParameterInfo parameter in parameters ?? new CallParameterInfo[0])
+            {
+                string symbol = (parameter.ActualExpression ?? string.Empty).Trim().Trim('"');
+                bool? constantValue = null;
+                string constantRule = null;
+                ResolvedBooleanConstant constant;
+                bool conflict;
+                if (string.Equals(parameter.Direction, "Input", StringComparison.OrdinalIgnoreCase) &&
+                    IsSingleOperand(parameter) &&
+                    BooleanConstantCatalogue.Default.TryResolve(parameter.ActualExpression, parameter.ResolvedMemberPath,
+                        out constant, out conflict))
+                {
+                    constantValue = constant.Value;
+                    constantRule = constant.Evidence;
+                }
+                result.Add(new AnalysisCallParameter(
+                    parameter.FormalName, parameter.Direction, parameter.FormalDataType,
+                    parameter.ActualExpression, parameter.RawActualExpression, parameter.ResolvedMemberPath,
+                    parameter.TraceStatus, constantValue, constantRule, NotConnectedSymbols.Contains(symbol)));
+            }
+            result.Sort((left, right) => StringComparer.OrdinalIgnoreCase.Compare(left.FormalName, right.FormalName));
+            return result.ToArray();
+        }
+
+        private static bool IsSingleOperand(CallParameterInfo parameter)
+        {
+            ExtractedBooleanExpression tree = parameter.ActualExpressionTree;
+            return tree == null
+                ? !string.IsNullOrWhiteSpace(parameter.ActualExpression) && parameter.ActualExpression.IndexOf(' ') < 0
+                : tree.Kind == ExtractedBooleanExpressionKind.Operand || tree.Kind == ExtractedBooleanExpressionKind.Constant;
+        }
+
         private static Dictionary<string, int> DriveTypes(EngineeringSnapshot snapshot)
         {
             var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -182,7 +221,7 @@ namespace TiaFds.Reporting
                     site.ProcessingVariant, site.CallingBlockName, site.CallingBlockNumber,
                     site.CallingBlockType, site.NetworkNumber, site.NetworkTitle,
                     site.CallOrdinal, site.InOutFormalParameterName, site.InOutActualExpression,
-                    source.Declaration.MemberPath));
+                    source.Declaration.MemberPath, CopyParameters(site.Parameters)));
             sites.Sort(CompareCallSites);
             ControlModuleInfo declaration = source.Declaration;
             var moduleBehaviour = new List<AnalysisBehaviouralCondition>();

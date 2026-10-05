@@ -355,7 +355,21 @@ namespace TiaFds.Step7Classic
             string calledBlock,
             string instanceDataBlock,
             IReadOnlyList<Step7CallArgumentModel> callArguments)
+            : this(label, command, operand, operandSymbol, calledBlock, instanceDataBlock, callArguments, null)
         {
+        }
+
+        public Step7StatementModel(
+            string label,
+            string command,
+            string operand,
+            string operandSymbol,
+            string calledBlock,
+            string instanceDataBlock,
+            IReadOnlyList<Step7CallArgumentModel> callArguments,
+            IReadOnlyList<Step7StatementModel> postCallStatements)
+        {
+            PostCallStatements = postCallStatements ?? new Step7StatementModel[0];
             Label = string.IsNullOrWhiteSpace(label) ? null : label.Trim();
             Command = (command ?? string.Empty).Trim();
             Operand = (operand ?? string.Empty).Trim();
@@ -375,6 +389,9 @@ namespace TiaFds.Step7Classic
         // Instance DB of an FB/SFB call, e.g. "DI5005".
         public string InstanceDataBlock { get; }
         public IReadOnlyList<Step7CallArgumentModel> CallArguments { get; }
+        // Statements the decompiler folds into a CALL row after the UC/CC: the copies of
+        // output actuals out of local data, e.g. "A L 1.1; OPN DB10; = DBX16.1".
+        public IReadOnlyList<Step7StatementModel> PostCallStatements { get; }
     }
 
     public sealed class Step7CallArgumentModel

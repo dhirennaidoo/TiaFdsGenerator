@@ -31,6 +31,7 @@ namespace TiaFds.Reporting
                         workbook.Worksheets.Add("Behavioural Conditions"), report);
                     WriteDiagnostics(workbook.Worksheets.Add("Diagnostics"), report);
                     WriteManualReview(workbook.Worksheets.Add("Manual Review"), report);
+                    WriteCallParameters(workbook.Worksheets.Add("Call Parameters"), report);
                     workbook.SaveAs(fullPath);
                 }
             }
@@ -291,6 +292,43 @@ namespace TiaFds.Reporting
             }
             FinishTable(sheet, row - 1, headers.Length, "BehaviouralConditionsTable",
                 new[] { 3, 4, 9, 10, 11, 16, 21, 22, 27, 28 });
+        }
+
+        private static void WriteCallParameters(IXLWorksheet sheet, AnalysisReport report)
+        {
+            string[] headers =
+            {
+                "Module Family", "Module Name", "Module Path", "Processing FC", "Caller Block Name",
+                "Caller Block Number", "Network Number", "Network Title", "Formal Name", "Direction",
+                "Formal Datatype", "Actual Expression", "Raw Actual", "Resolved Member Path",
+                "Constant Value", "Not Connected", "Trace Status"
+            };
+            Header(sheet, 1, headers);
+            var row = 2;
+            foreach (AnalysisModule module in report.Modules)
+                foreach (AnalysisCallSite site in module.CallSites)
+                    foreach (AnalysisCallParameter parameter in site.Parameters)
+                    {
+                        Text(sheet.Cell(row, 1), module.ModuleFamily);
+                        Text(sheet.Cell(row, 2), module.ModuleName);
+                        Text(sheet.Cell(row, 3), module.MemberPath);
+                        Text(sheet.Cell(row, 4), site.ProcessingFunctionName);
+                        Text(sheet.Cell(row, 5), site.CallingBlockName);
+                        NullableNumber(sheet.Cell(row, 6), site.CallingBlockNumber);
+                        NullableNumber(sheet.Cell(row, 7), site.NetworkNumber);
+                        Text(sheet.Cell(row, 8), site.NetworkTitle);
+                        Text(sheet.Cell(row, 9), parameter.FormalName);
+                        Text(sheet.Cell(row, 10), parameter.Direction);
+                        Text(sheet.Cell(row, 11), parameter.FormalDataType);
+                        Text(sheet.Cell(row, 12), parameter.ActualExpression);
+                        Text(sheet.Cell(row, 13), parameter.RawActualExpression);
+                        Text(sheet.Cell(row, 14), parameter.ResolvedMemberPath);
+                        Text(sheet.Cell(row, 15), BooleanText(parameter.ConstantValue));
+                        Text(sheet.Cell(row, 16), BooleanText(parameter.NotConnected));
+                        Text(sheet.Cell(row, 17), parameter.TraceStatus);
+                        row++;
+                    }
+            FinishTable(sheet, row - 1, headers.Length, "CallParametersTable", new[] { 3, 8, 12, 14 });
         }
 
         private static void WriteProcessingCalls(IXLWorksheet sheet, AnalysisReport report)

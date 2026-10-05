@@ -280,9 +280,39 @@ namespace TiaFds.Step7Classic
                     row.SymbolTableEntry == null ? null : row.SymbolTableEntry.Symbol,
                     row.CalledBlock,
                     row.DiName,
-                    arguments));
+                    arguments,
+                    PostCallStatements(row)));
             }
             return new Step7NetworkModel(number, network.Name, network.Comment, statements);
+        }
+
+        // A CALL row's combined commands hold the parameter setup, the UC/CC itself and then
+        // the copies of output actuals out of local data; only the part after the UC/CC is kept.
+        private static List<Step7StatementModel> PostCallStatements(S7FunctionBlockRow row)
+        {
+            var result = new List<Step7StatementModel>();
+            if (row.CombinedCommands == null || row.CombinedCommands.Count == 0) return result;
+            bool afterCall = false;
+            foreach (FunctionBlockRow combined in row.CombinedCommands)
+            {
+                string command = (combined.Command ?? string.Empty).Trim();
+                if (!afterCall)
+                {
+                    afterCall = string.Equals(command, "UC", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(command, "CC", StringComparison.OrdinalIgnoreCase);
+                    continue;
+                }
+                var detail = combined as S7FunctionBlockRow;
+                result.Add(new Step7StatementModel(
+                    combined.Label,
+                    command,
+                    detail == null ? null : detail.Parameter,
+                    detail == null || detail.SymbolTableEntry == null ? null : detail.SymbolTableEntry.Symbol,
+                    null,
+                    null,
+                    null));
+            }
+            return result;
         }
 
         public void Dispose()

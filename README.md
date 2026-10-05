@@ -76,7 +76,9 @@ TiaFds.Cli.exe ^
 
 Output paths are explicit; parent directories are created and existing files are overwritten. The CLI prints each successfully generated absolute path. A write failure names the affected path and returns exit code `7`.
 
-The JSON reporting schema is `1.3`. The workbook contains these worksheets in order: `Summary`, `Modules`, `Processing Calls`, `Behavioural Conditions`, `Diagnostics`, and `Manual Review`. It uses filterable tables and preserves project text as text so formula-like engineering values are not evaluated by Excel.
+The JSON reporting schema is `1.4`. The workbook contains these worksheets in order: `Summary`, `Modules`, `Processing Calls`, `Behavioural Conditions`, `Diagnostics`, `Manual Review`, and `Call Parameters`.
+
+Report schema 1.4 adds every actual parameter of each processing call: `parameters` on each processing call in JSON, and one row per parameter on `Call Parameters`. The columns are Module Family, Module Name, Module Path, Processing FC, Caller Block Name/Number, Network Number/Title, Formal Name, Direction, Formal Datatype, Actual Expression, Raw Actual, Resolved Member Path, Constant Value, Not Connected and Trace Status. Constant Value is set for inputs driven by a catalogued constant (`glb.One`, `glb.Zero`, `glb.Bridge`). Not Connected marks the library's placeholder `glb.DontCare`. It uses filterable tables and preserves project text as text so formula-like engineering values are not evaluated by Excel.
 
 ## Prerequisites and Siemens reference
 
@@ -255,6 +257,8 @@ Classic diagnostics use the `S7C` prefix:
 - `S7C008_SETUP_ROUTINE_NOT_RECOGNISED`
 - `S7C009_SETUP_ENTRY_NAME_MISMATCH`
 - `S7C010_DRIVE_NOT_INITIALISED_BY_SETUP`
+- `S7C011_CALL_INPUT_NOT_TRACED`
+- `S7C012_CALL_OUTPUT_NOT_TRACED`
 
 Data-block members also carry their **actual value** from the offline DB
 (`actualValue`), not just the declared start value.
@@ -299,8 +303,37 @@ A pointer resolves only when exactly one member starts at that address with
 the formal parameter's datatype, taken from the called block's interface.
 Otherwise the call keeps its actual expression and reports
 `S7C006_POINTER_NOT_RESOLVED` with the candidates, and correlation reports
-`CM104`. LAD boolean inputs arriving through local bits (`RN := L 0.0`) are
-kept as actual expressions and are not traced yet.
+`CM104`. A resolved pointer is shown by symbol (`"db.cm.Drv".AM_M1035`), and
+the pointer itself is kept as `rawActualExpression`.
+
+### Classic call actuals through local data
+
+LAD passes actuals through anonymous local data, so the decompiled call shows
+`RN := L 0.0`, not what the engineer wired. Inputs are assigned before the
+call, and outputs are copied after it inside the CALL row. The decompiler
+folds those copies into the row, and the loader keeps them as
+`PostCallStatements`:
+
+```text
+A  DB11.DBX 24.4        ("ioDI".AM_M1020RN)    =  L0.0        RN := L 0.0
+A  M0.1                 ("glb.One")            =  L0.1        TR := L 0.1
+CALL FC50  ...  UC FC50;  A L 1.1;  OPN DB10;  = DBX16.1       MO := L 1.1  -> "ioDO".AM_M1020MO
+```
+
+The logic parser records the network's local bits and words at every CALL.
+The call mapper then replaces the local actual with the operand or
+expression wired to it. Outputs come from the post-call copies, matching
+only the plain patterns `A L x; [OPN DBn;] = dest` and
+`L LWn|LDn; [OPN DBn;] T dest`. Absolute global actuals are shown by symbol
+(`M 0.4` → `"glb.DontCare"`). Each parameter keeps `rawActualExpression`, a
+`traceStatus` (`Traced` / `NotTraced`), and for boolean inputs the
+`actualExpressionTree`.
+
+The trace never guesses. An input with no earlier writer, a network made
+conditional by a jump, or an output copy with extra logic keeps the raw
+address and raises `S7C011_CALL_INPUT_NOT_TRACED` or
+`S7C012_CALL_OUTPUT_NOT_TRACED`. The post-call copies are also emitted as logic
+assignments (`"ioDO".AM_M1020MO := "FnBlk.cm.Drv".MO (call output)`).
 
 Call records follow the TIA conventions (directions `Input`/`Output`/`InOut`,
 1-based ordinal per calling block, caller path `Blocks/<name>`). `CM122` is

@@ -12,5 +12,7 @@ namespace TiaFds.Step7Classic
         public const string SetupRoutineNotRecognised = "S7C008_SETUP_ROUTINE_NOT_RECOGNISED";
         public const string SetupEntryNameMismatch = "S7C009_SETUP_ENTRY_NAME_MISMATCH";
         public const string DriveNotInitialisedBySetup = "S7C010_DRIVE_NOT_INITIALISED_BY_SETUP";
+        public const string CallInputNotTraced = "S7C011_CALL_INPUT_NOT_TRACED";
+        public const string CallOutputNotTraced = "S7C012_CALL_OUTPUT_NOT_TRACED";
     }
 }

@@ -95,7 +95,7 @@ namespace TiaFds.Analysis
                     call.CalledBlockName, call.CalledBlockNumber, definition.VariantName,
                     call.CallingBlockName, call.CallingBlockNumber, call.CallingBlockType,
                     call.NetworkNumber, call.NetworkTitle, call.CallOrdinal,
-                    parameter.FormalName, parameter.ActualExpression);
+                    parameter.FormalName, parameter.ActualExpression, call.Parameters);
                 string siteKey = SiteKey(module.MemberPath, call);
                 if (!duplicateSites.Add(siteKey))
                 {

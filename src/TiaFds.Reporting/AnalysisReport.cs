@@ -16,7 +16,7 @@ namespace TiaFds.Reporting
     [JsonObject(MemberSerialization.OptIn)]
     public sealed class AnalysisReport
     {
-        public const string CurrentSchemaVersion = "1.3";
+        public const string CurrentSchemaVersion = "1.4";
 
         public AnalysisReport(
             AnalysisProjectInfo project,
@@ -376,7 +376,22 @@ namespace TiaFds.Reporting
             int? networkNumber, string networkTitle, int callOrdinal,
             string inOutFormalParameterName, string inOutActualExpression,
             string resolvedMemberPath)
+            : this(processingFunctionName, processingFunctionNumber, processingVariant,
+                callingBlockName, callingBlockNumber, callingBlockType, networkNumber,
+                networkTitle, callOrdinal, inOutFormalParameterName,
+                inOutActualExpression, resolvedMemberPath, null)
         {
+        }
+
+        public AnalysisCallSite(
+            string processingFunctionName, int? processingFunctionNumber,
+            string processingVariant, string callingBlockName,
+            int? callingBlockNumber, string callingBlockType,
+            int? networkNumber, string networkTitle, int callOrdinal,
+            string inOutFormalParameterName, string inOutActualExpression,
+            string resolvedMemberPath, IReadOnlyList<AnalysisCallParameter> parameters)
+        {
+            Parameters = AnalysisReport.Copy(parameters);
             ProcessingFunctionName = processingFunctionName;
             ProcessingFunctionNumber = processingFunctionNumber;
             ProcessingVariant = processingVariant;
@@ -402,6 +417,45 @@ namespace TiaFds.Reporting
         [JsonProperty("parameterName")] public string InOutFormalParameterName { get; }
         [JsonProperty("actualExpression")] public string InOutActualExpression { get; }
         [JsonProperty("resolvedMemberPath")] public string ResolvedMemberPath { get; }
+        // All actual parameters of the call (report schema 1.4).
+        [JsonProperty("parameters")] public IReadOnlyList<AnalysisCallParameter> Parameters { get; }
+    }
+
+    // One actual parameter of a processing call, as wired in the editor: STEP 7 Classic
+    // actuals passed through local data are traced back to the operand or expression.
+    [JsonObject(MemberSerialization.OptIn)]
+    public sealed class AnalysisCallParameter
+    {
+        public AnalysisCallParameter(
+            string formalName, string direction, string formalDataType,
+            string actualExpression, string rawActualExpression, string resolvedMemberPath,
+            string traceStatus, bool? constantValue, string constantRule, bool notConnected)
+        {
+            FormalName = formalName;
+            Direction = direction;
+            FormalDataType = formalDataType;
+            ActualExpression = actualExpression;
+            RawActualExpression = rawActualExpression;
+            ResolvedMemberPath = resolvedMemberPath;
+            TraceStatus = traceStatus;
+            ConstantValue = constantValue;
+            ConstantRule = constantRule;
+            NotConnected = notConnected;
+        }
+
+        [JsonProperty("formalName")] public string FormalName { get; }
+        [JsonProperty("direction")] public string Direction { get; }
+        [JsonProperty("formalDataType")] public string FormalDataType { get; }
+        [JsonProperty("actualExpression")] public string ActualExpression { get; }
+        [JsonProperty("rawActualExpression")] public string RawActualExpression { get; }
+        [JsonProperty("resolvedMemberPath")] public string ResolvedMemberPath { get; }
+        // Traced, NotTraced, or null when the actual was read as written.
+        [JsonProperty("traceStatus")] public string TraceStatus { get; }
+        // Set when an input is driven by a catalogued boolean constant (glb.One, glb.Bridge).
+        [JsonProperty("constantValue")] public bool? ConstantValue { get; }
+        [JsonProperty("constantRule")] public string ConstantRule { get; }
+        // The actual is the library's "not connected" placeholder (glb.DontCare).
+        [JsonProperty("notConnected")] public bool NotConnected { get; }
     }
 
     [JsonObject(MemberSerialization.OptIn)]

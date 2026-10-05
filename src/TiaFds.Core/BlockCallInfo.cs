@@ -3,17 +3,43 @@ using Newtonsoft.Json;
 
 namespace TiaFds.Core
 {
+    // How an actual parameter was obtained. Null for actuals that were read as written
+    // (TIA wires, P# pointers, symbols); STEP 7 Classic local-data actuals are traced.
+    public static class CallParameterTraceStatus
+    {
+        // A local-data actual (L 0.0, LW1) was replaced by the operand or expression wired to it.
+        public const string Traced = "Traced";
+        // A local-data actual could not be traced; the raw address is kept and diagnosed.
+        public const string NotTraced = "NotTraced";
+    }
+
     [JsonObject(MemberSerialization.OptIn)]
     public sealed class CallParameterInfo
     {
-        [JsonConstructor]
         public CallParameterInfo(
             string formalName,
             string direction,
             string formalDataType,
             string actualExpression,
             string resolvedMemberPath)
+            : this(formalName, direction, formalDataType, actualExpression, resolvedMemberPath, null, null, null)
         {
+        }
+
+        [JsonConstructor]
+        public CallParameterInfo(
+            string formalName,
+            string direction,
+            string formalDataType,
+            string actualExpression,
+            string resolvedMemberPath,
+            string rawActualExpression,
+            ExtractedBooleanExpression actualExpressionTree,
+            string traceStatus)
+        {
+            RawActualExpression = string.IsNullOrWhiteSpace(rawActualExpression) ? null : rawActualExpression;
+            ActualExpressionTree = actualExpressionTree;
+            TraceStatus = string.IsNullOrWhiteSpace(traceStatus) ? null : traceStatus;
             FormalName = formalName;
             Direction = direction;
             FormalDataType = formalDataType;
@@ -35,6 +61,19 @@ namespace TiaFds.Core
 
         [JsonProperty("resolvedMemberPath")]
         public string ResolvedMemberPath { get; }
+
+        // The actual as decompiled when it differs from actualExpression (e.g. "L 0.0").
+        [JsonProperty("rawActualExpression", NullValueHandling = NullValueHandling.Ignore)]
+        public string RawActualExpression { get; }
+
+        // Boolean actuals traced through local data: the wired expression, so constants
+        // (glb.One) and bypass flags can be classified.
+        [JsonProperty("actualExpressionTree", NullValueHandling = NullValueHandling.Ignore)]
+        public ExtractedBooleanExpression ActualExpressionTree { get; }
+
+        // CallParameterTraceStatus value, or null when the actual was read as written.
+        [JsonProperty("traceStatus", NullValueHandling = NullValueHandling.Ignore)]
+        public string TraceStatus { get; }
     }
 
     [JsonObject(MemberSerialization.OptIn)]

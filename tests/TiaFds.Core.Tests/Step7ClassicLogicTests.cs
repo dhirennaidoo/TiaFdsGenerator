@@ -204,7 +204,7 @@ namespace TiaFds.Core.Tests
             AnalysisReport report = new AnalysisReportBuilder().Build(snapshot, discovery, implementation,
                 new ControlModuleBehaviourAnalyzer().Analyze(snapshot, discovery, implementation));
 
-            Assert.AreEqual("1.3", report.SchemaVersion);
+            Assert.AreEqual("1.4", report.SchemaVersion);
             Assert.AreEqual(AnalysisLogicOperation.Set, report.BehaviouralConditions.Single().Operation);
 
             string directory = Path.Combine(Path.GetTempPath(), "TiaFdsTests", Guid.NewGuid().ToString("N"));

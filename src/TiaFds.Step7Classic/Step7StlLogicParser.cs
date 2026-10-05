@@ -29,6 +29,8 @@ namespace TiaFds.Step7Classic
         private static readonly Regex AreaPointer = new Regex(
             @"^(?<width>[BWD])?\[AR1,P#(?<byte>\d+)\.(?<bit>[0-7])\]$",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        private static readonly Regex LocalWord = new Regex(
+            @"^L[BWD]\d+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         private static readonly Regex OpenDataBlock = new Regex(
             @"^DB(?<db>\d+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         private static readonly Regex UnqualifiedDbBit = new Regex(
@@ -52,7 +54,7 @@ namespace TiaFds.Step7Classic
         // Commands that neither read nor write the RLO.
         private static readonly HashSet<string> Neutral = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "BLD", "NOP", "T", "SAVE", "LAR2", "TAR1", "TAR2", "CAR", "+AR1", "+AR2", "INC", "DEC",
+            "BLD", "NOP", "SAVE", "LAR2", "TAR1", "TAR2", "CAR", "+AR1", "+AR2", "INC", "DEC",
             "INVI", "INVD", "NEGI", "NEGD", "NEGR", "ITD", "ITB", "BTI", "DTB", "BTD", "DTR", "RND",
             "RND+", "RND-", "TRUNC", "ABS", "SQRT", "SQR", "LN", "EXP", "SIN", "COS", "TAN", "ASIN",
             "ACOS", "ATAN", "CAW", "CAD", "PUSH", "POP", "ENT", "LEAVE", "SLW", "SRW", "SLD", "SRD",
@@ -77,6 +79,15 @@ namespace TiaFds.Step7Classic
         public IReadOnlyList<ExtractedLogicAssignment> Parse(
             Step7CodeBlockModel block, string blockName, string blockType, string blockLanguage)
         {
+            return Parse(block, blockName, blockType, blockLanguage, null);
+        }
+
+        // traces, when given, receives the local-data state at every CALL (keyed by
+        // Step7CallTrace.Key) so call actuals passed through local data can be resolved.
+        public IReadOnlyList<ExtractedLogicAssignment> Parse(
+            Step7CodeBlockModel block, string blockName, string blockType, string blockLanguage,
+            IDictionary<string, Step7CallTrace> traces)
+        {
             var assignments = new List<ExtractedLogicAssignment>();
             var statementOrder = 0;
             bool blockEnded = false;
@@ -87,7 +98,7 @@ namespace TiaFds.Step7Classic
                 if (blockEnded) break;
                 var context = new NetworkContext(block, blockName, blockType, blockLanguage, network);
                 if (blockTainted) context.Taint(blockTaintReason);
-                ParseNetwork(context, assignments, ref statementOrder);
+                ParseNetwork(context, assignments, ref statementOrder, traces);
                 if (context.BlockEnded) blockEnded = true;
                 if (context.BlockTaintReason != null && !blockTainted)
                 {
@@ -98,9 +109,16 @@ namespace TiaFds.Step7Classic
             return assignments;
         }
 
-        private void ParseNetwork(NetworkContext context, List<ExtractedLogicAssignment> assignments, ref int statementOrder)
+        private void ParseNetwork(NetworkContext context, List<ExtractedLogicAssignment> assignments, ref int statementOrder,
+            IDictionary<string, Step7CallTrace> traces)
         {
-            IReadOnlyList<Step7StatementModel> statements = context.Network.Statements;
+            ProcessStatements(context, context.Network.Statements, assignments, ref statementOrder, traces);
+        }
+
+        // traces is null for the statements a CALL row carries after its UC/CC.
+        private void ProcessStatements(NetworkContext context, IReadOnlyList<Step7StatementModel> statements,
+            List<ExtractedLogicAssignment> assignments, ref int statementOrder, IDictionary<string, Step7CallTrace> traces)
+        {
             for (var index = 0; index < statements.Count; index++)
             {
                 Step7StatementModel statement = statements[index];
@@ -191,7 +209,16 @@ namespace TiaFds.Step7Classic
                     case "CALL":
                     case "UC":
                     case "CC":
+                        if (traces != null)
+                            traces[Step7CallTrace.Key(context.Block.Kind, context.Block.Number, context.Network.Number, index)] =
+                                context.TraceForCall();
                         context.AfterCall(statement, symbols);
+                        if (statement.PostCallStatements.Count > 0)
+                            ProcessStatements(context, statement.PostCallStatements, assignments, ref statementOrder, null);
+                        continue;
+                    case "T":
+                        Match localWord = LocalWord.Match(operand);
+                        if (localWord.Success) context.StoreLocalWord(localWord.Value.ToUpperInvariant());
                         continue;
                     case "BEU":
                     case "BE":
@@ -433,6 +460,8 @@ namespace TiaFds.Step7Classic
         // Evaluation state for one network.
         private sealed class NetworkContext
         {
+            private readonly Dictionary<string, Step7TracedValue> localWords =
+                new Dictionary<string, Step7TracedValue>(StringComparer.OrdinalIgnoreCase);
             private readonly Dictionary<string, ExtractedBooleanExpression> localBits =
                 new Dictionary<string, ExtractedBooleanExpression>(StringComparer.OrdinalIgnoreCase);
             private readonly Stack<Frame> nesting = new Stack<Frame>();
@@ -693,15 +722,31 @@ namespace TiaFds.Step7Classic
                 return true;
             }
 
+            public void StoreLocalWord(string key)
+            {
+                localWords[key] = accumulator1 == null
+                    ? new Step7TracedValue("?", null)
+                    : new Step7TracedValue(accumulator1.Display, accumulator1.ResolvedPath);
+            }
+
+            public Step7CallTrace TraceForCall()
+            {
+                return new Step7CallTrace(localBits, localWords, TaintReason);
+            }
+
             public void AfterCall(Step7StatementModel statement, Step7SymbolLookup symbols)
             {
                 string called = symbols.SymbolOf(statement.CalledBlock ?? string.Empty) ?? statement.CalledBlock;
                 foreach (Step7CallArgumentModel argument in statement.CallArguments)
                 {
+                    if (argument.Section != "OUT" && argument.Section != "IN_OUT") continue;
+                    string output = "\"" + called + "\"." + argument.Name + " (call output)";
                     string key;
-                    if ((argument.Section == "OUT" || argument.Section == "IN_OUT") &&
-                        TryAnonymousLocalBit(Compact(argument.Value), out key))
-                        localBits[key] = Expressions.Operand("\"" + called + "\"." + argument.Name + " (call output)", null);
+                    string value = Compact(argument.Value);
+                    if (TryAnonymousLocalBit(value, out key))
+                        localBits[key] = Expressions.Operand(output, null);
+                    else if (LocalWord.IsMatch(value))
+                        localWords[value.ToUpperInvariant()] = new Step7TracedValue(output, null);
                 }
                 accumulator1 = null;
                 accumulator2 = null;
